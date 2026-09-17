@@ -196,7 +196,33 @@ Create the database used by the User Service:
 CREATE DATABASE fitness_user_db;
 ```
 
-Update the PostgreSQL username/password in your local configuration if required.
+The User Service reads its credentials from the environment rather than from committed
+configuration, so set the password before starting it:
+
+```text
+POSTGRES_PASSWORD=your_postgres_password
+POSTGRES_USER=postgres              # optional, defaults to postgres
+```
+
+`user-service.yml` refers to them as placeholders:
+
+```yaml
+spring:
+  datasource:
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD}
+```
+
+The Config Server passes these through unresolved, so `POSTGRES_PASSWORD` must be set in the
+**User Service** process environment, not the Config Server's. On Windows, set it once for your
+user account:
+
+```powershell
+[Environment]::SetEnvironmentVariable("POSTGRES_PASSWORD", "your_postgres_password", "User")
+```
+
+`POSTGRES_PASSWORD` has no default. If it is not set, the User Service fails at startup with
+`Could not resolve placeholder 'POSTGRES_PASSWORD'`.
 
 ---
 
