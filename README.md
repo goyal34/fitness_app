@@ -295,6 +295,44 @@ Client ID: oauth2-pkce-client
 
 Make sure the Keycloak realm, client, redirect URI, and user configuration match the application's authentication settings.
 
+### Bootstrapping the realm
+
+If you are starting from an empty Keycloak, run it and create the realm, the PKCE client and a
+test user. These values must match `fitness-app-frontend/src/authConfig.js` and the
+`jwk-set-uri` in `api-gateway.yml`:
+
+```powershell
+docker run -d --name fitness-keycloak -p 8181:8080 `
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin `
+  quay.io/keycloak/keycloak:26.0 start-dev
+```
+
+Wait ~30 seconds for Keycloak to boot, then:
+
+```powershell
+$KC = "http://localhost:8181"
+$tok = (Invoke-RestMethod -Method Post -Uri "$KC/realms/master/protocol/openid-connect/token" `
+  -Body @{client_id='admin-cli';username='admin';password='admin';grant_type='password'}).access_token
+$H = @{ Authorization = "Bearer $tok"; 'Content-Type' = 'application/json' }
+
+Invoke-RestMethod -Method Post -Uri "$KC/admin/realms" -Headers $H `
+  -Body '{"realm":"fitness-oauth2","enabled":true}'
+
+Invoke-RestMethod -Method Post -Uri "$KC/admin/realms/fitness-oauth2/clients" -Headers $H -Body @'
+{"clientId":"oauth2-pkce-client","enabled":true,"publicClient":true,"standardFlowEnabled":true,
+ "directAccessGrantsEnabled":true,"redirectUris":["http://localhost:5173/*","http://localhost:5173"],
+ "webOrigins":["http://localhost:5173","+"],"attributes":{"pkce.code.challenge.method":"S256"}}
+'@
+
+Invoke-RestMethod -Method Post -Uri "$KC/admin/realms/fitness-oauth2/users" -Headers $H -Body @'
+{"username":"testuser","email":"testuser@fitness.local","emailVerified":true,"firstName":"Test",
+ "lastName":"User","enabled":true,"credentials":[{"type":"password","value":"test123","temporary":false}]}
+'@
+```
+
+The gateway's `KeycloakUserSyncFilter` reads the `sub`, `email`, `given_name` and `family_name`
+claims to auto-register users, so the test user needs an email, first name and last name set.
+
 ---
 
 # ▶️ Running the Application
@@ -345,6 +383,15 @@ Runs on:
 ```text
 http://localhost:8081
 ```
+
+> If PostgreSQL is running in a container, the JVM may send a timezone ID the container's tzdata
+> does not recognise, and the service will fail to start. Pass an explicit zone in that case:
+>
+> ```bash
+> mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Duser.timezone=Asia/Kolkata"
+> ```
+>
+> See [Troubleshooting](#-troubleshooting).
 
 ### 4. Activity Service
 
@@ -560,6 +607,60 @@ Then test APIs through the Gateway:
 ```text
 http://localhost:8080/api/...
 ```
+
+To exercise the full chain from the command line, fetch a token and call the Gateway with it:
+
+```powershell
+$t = (Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8181/realms/fitness-oauth2/protocol/openid-connect/token" `
+  -Body @{client_id='oauth2-pkce-client';username='testuser';password='test123';
+          grant_type='password';scope='openid profile email'}).access_token
+
+Invoke-RestMethod -Uri "http://localhost:8080/api/activities" -Headers @{Authorization="Bearer $t"}
+```
+
+The same request without the `Authorization` header should return **401**.
+
+---
+
+# 🩺 Troubleshooting
+
+**User Service fails with `invalid value for parameter "TimeZone": "Asia/Calcutta"`**
+
+The JVM's default zone ID is not present in the PostgreSQL container's tzdata, so the JDBC
+connection is rejected at startup. Start the service with an explicit zone:
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Duser.timezone=Asia/Kolkata"
+```
+
+**AI Service fails at startup with an unresolved placeholder**
+
+`GeminiService` injects `${gemini.api.key}` with `@Value`, so `GEMINI_API_KEY` must be set in the
+environment before launch or the context will not start. Without a valid key the service still
+starts and consumes RabbitMQ messages, but the Gemini call returns `400 Bad Request` and no
+recommendations are generated.
+
+**Port already in use on 5432, 27017, 8080 or 5173**
+
+Another Docker stack with a restart policy may claim these ports when Docker Desktop starts.
+Identify and stop the container holding the port:
+
+```powershell
+docker ps --format "{{.Names}}`t{{.Ports}}"
+docker stop <container-name>
+```
+
+**Services start but do not appear in Eureka**
+
+Each service reads its Eureka URL from the Config Server, so start `configserver` (8888) and
+`eureka` (8761) first and let them come up before launching the rest.
+
+**CORS errors from the frontend**
+
+`SecurityConfig` in the gateway allows origin `http://localhost:5173` only. If you run the
+frontend on a different port, update the allowed origins there as well as `redirectUri` in
+`fitness-app-frontend/src/authConfig.js` and the client's redirect URIs in Keycloak.
 
 ---
 
