@@ -1,6 +1,7 @@
 import {
-    Box, Card, CardActionArea, CardContent, Chip, Grid2, IconButton,
-    MenuItem, Skeleton, TextField, Tooltip, Typography
+    Box, Button, Card, CardActionArea, CardContent, Chip, Dialog,
+    DialogActions, DialogContent, DialogContentText, DialogTitle, Grid2,
+    IconButton, MenuItem, Skeleton, TextField, Tooltip, Typography
 } from '@mui/material'
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router';
@@ -27,6 +28,13 @@ const ActivityList = ({ activities, loading, onDelete }) => {
     const navigate = useNavigate();
     const [filter, setFilter] = useState('ALL');
     const [sort, setSort] = useState('NEWEST');
+    const [pendingDelete, setPendingDelete] = useState(null);
+
+    const confirmDelete = () => {
+        const target = pendingDelete;
+        setPendingDelete(null);
+        if (target) onDelete?.(target);
+    };
 
     const stats = useMemo(() => {
         const totalMinutes = activities.reduce((sum, a) => sum + (a.duration ?? 0), 0);
@@ -167,7 +175,7 @@ const ActivityList = ({ activities, loading, onDelete }) => {
                                     <Tooltip title="Delete activity">
                                         <IconButton
                                             size="small" aria-label="delete activity"
-                                            onClick={(e) => { e.stopPropagation(); onDelete?.(activity); }}
+                                            onClick={(e) => { e.stopPropagation(); setPendingDelete(activity); }}
                                             sx={{ position: 'absolute', top: 8, right: 8 }}
                                         >
                                             ✕
@@ -179,6 +187,35 @@ const ActivityList = ({ activities, loading, onDelete }) => {
                     })}
                 </Grid2>
             )}
+
+            <Dialog
+                open={Boolean(pendingDelete)}
+                onClose={() => setPendingDelete(null)}
+                aria-labelledby="delete-activity-title"
+            >
+                <DialogTitle id="delete-activity-title">Delete this activity?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        {pendingDelete && (
+                            <>
+                                {activityStyle(pendingDelete.type).label}
+                                {pendingDelete.duration != null && ` · ${pendingDelete.duration} min`}
+                                {pendingDelete.caloriesBurned != null && ` · ${pendingDelete.caloriesBurned} cal`}
+                                {pendingDelete.createdAt && ` · ${formatDate(pendingDelete.createdAt)}`}
+                            </>
+                        )}
+                    </DialogContentText>
+                    <DialogContentText sx={{ mt: 2 }}>
+                        This cannot be undone. The AI report generated for it will no longer be reachable.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPendingDelete(null)}>Cancel</Button>
+                    <Button onClick={confirmDelete} color="error" variant="contained" autoFocus>
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     )
 }
