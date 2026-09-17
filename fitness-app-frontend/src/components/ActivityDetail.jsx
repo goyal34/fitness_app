@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
-import { getActivityDetail } from '../services/api';
+import { getActivity, getActivityDetail } from '../services/api';
 import { Box, Card, CardContent, Divider, Typography } from '@mui/material';
 
 const ActivityDetail = () => {
@@ -9,17 +9,28 @@ const ActivityDetail = () => {
   const [recommendation, setRecommendation] = useState(null);
 
   useEffect(() => {
-    const fetchActivityDetail = async () => {
+    const fetchActivity = async () => {
       try {
-        const response = await getActivityDetail(id);
+        const response = await getActivity(id);
         setActivity(response.data);
-        setRecommendation(response.data.recommendation);
       } catch (error) {
         console.error(error);
       }
     }
 
-    fetchActivityDetail();
+    const fetchRecommendation = async () => {
+      try {
+        const response = await getActivityDetail(id);
+        setRecommendation(response.data);
+      } catch (error) {
+        // The AI recommendation is generated asynchronously, so it may not
+        // exist yet for a newly created activity.
+        console.error(error);
+      }
+    }
+
+    fetchActivity();
+    fetchRecommendation();
   }, [id]);
 
   if (!activity) {
@@ -37,33 +48,42 @@ const ActivityDetail = () => {
                 </CardContent>
             </Card>
 
-            {recommendation && (
+            {recommendation ? (
                 <Card>
                     <CardContent>
                         <Typography variant="h5" gutterBottom>AI Recommendation</Typography>
                         <Typography variant="h6">Analysis</Typography>
-                        <Typography paragraph>{activity.recommendation}</Typography>
-                        
+                        <Typography paragraph>{recommendation.recommendation}</Typography>
+
                         <Divider sx={{ my: 2 }} />
-                        
+
                         <Typography variant="h6">Improvements</Typography>
-                        {activity?.improvements?.map((improvement, index) => (
-                            <Typography key={index} paragraph>• {activity.improvements}</Typography>
+                        {recommendation.improvements?.map((improvement, index) => (
+                            <Typography key={index} paragraph>• {improvement}</Typography>
                         ))}
-                        
+
                         <Divider sx={{ my: 2 }} />
-                        
+
                         <Typography variant="h6">Suggestions</Typography>
-                        {activity?.suggestions?.map((suggestion, index) => (
+                        {recommendation.suggestions?.map((suggestion, index) => (
                             <Typography key={index} paragraph>• {suggestion}</Typography>
                         ))}
-                        
+
                         <Divider sx={{ my: 2 }} />
-                        
+
                         <Typography variant="h6">Safety Guidelines</Typography>
-                        {activity?.safety?.map((safety, index) => (
+                        {recommendation.safety?.map((safety, index) => (
                             <Typography key={index} paragraph>• {safety}</Typography>
                         ))}
+                    </CardContent>
+                </Card>
+            ) : (
+                <Card>
+                    <CardContent>
+                        <Typography variant="h5" gutterBottom>AI Recommendation</Typography>
+                        <Typography color="text.secondary">
+                            No recommendation has been generated for this activity yet.
+                        </Typography>
                     </CardContent>
                 </Card>
             )}
