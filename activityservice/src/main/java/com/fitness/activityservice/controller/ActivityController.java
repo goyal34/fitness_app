@@ -34,4 +34,11 @@ public class ActivityController {
     public ResponseEntity<ActivityResponse> getActivity(@PathVariable String activityId){
         return ResponseEntity.ok(activityService.getActivityById(activityId));
     }
+
+    @DeleteMapping("/{activityId}")
+    public ResponseEntity<Void> deleteActivity(@PathVariable String activityId,
+                                               @RequestHeader("X-User-ID") String userId){
+        activityService.deleteActivity(activityId, userId);
+        return ResponseEntity.noContent().build();
+    }
 }

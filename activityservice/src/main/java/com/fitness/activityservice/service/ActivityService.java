@@ -82,4 +82,15 @@ public class ActivityService {
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new RuntimeException("Activity not found with id: " + activityId));
     }
+
+    public void deleteActivity(String activityId, String userId) {
+        Activity activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new RuntimeException("Activity not found with id: " + activityId));
+
+        if (!activity.getUserId().equals(userId)) {
+            throw new RuntimeException("Activity does not belong to user: " + userId);
+        }
+
+        activityRepository.delete(activity);
+    }
 }
