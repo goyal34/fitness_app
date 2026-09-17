@@ -254,7 +254,7 @@ Create a Gemini API key using Google AI Studio.
 Set these environment variables:
 
 ```text
-GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=
+GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=
 GEMINI_API_KEY=YOUR_API_KEY
 ```
 
@@ -265,6 +265,21 @@ GEMINI_API_KEY=YOUR_API_KEY
 ```
 
 so `GEMINI_URL` must be the full model endpoint and must end with the trailing `?key=`.
+
+**Google retires older models periodically.** If the AI Service logs a `404` like
+`This model models/... is no longer available`, the response names the current replacement — put
+that model into `GEMINI_URL`. You can check a key and model in one call before starting the
+service:
+
+```powershell
+$k = "YOUR_API_KEY"
+$u = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$k"
+Invoke-RestMethod -Method Post -Uri $u -ContentType "application/json" `
+  -Body '{"contents":[{"parts":[{"text":"Say hello"}]}]}'
+```
+
+A `candidates` array means the key and model are both good. A `400` with `API_KEY_INVALID` means
+the key is wrong; a `404` means the model name needs updating.
 
 **Never commit your actual API key to GitHub.**
 
@@ -646,8 +661,21 @@ mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Duser.timezone=Asia/Kolkata
 
 `GeminiService` injects `${gemini.api.key}` with `@Value`, so `GEMINI_API_KEY` must be set in the
 environment before launch or the context will not start. Without a valid key the service still
-starts and consumes RabbitMQ messages, but the Gemini call returns `400 Bad Request` and no
-recommendations are generated.
+starts and consumes RabbitMQ messages, but the Gemini call fails and no recommendations are
+generated.
+
+**No recommendations appear for new activities**
+
+The AI Service logs the raw Gemini response at INFO, so check that terminal first. Two common
+causes, both reported in the response body:
+
+* `400` with `API_KEY_INVALID` — the key is wrong. Copy it again from AI Studio using the copy
+  button rather than selecting the text.
+* `404` with `This model models/... is no longer available` — the model in `GEMINI_URL` has been
+  retired. The message names the replacement; update `GEMINI_URL` and restart the service.
+
+Messages that fail are requeued by RabbitMQ, so once the cause is fixed and the service restarts,
+the backlog is processed automatically and earlier activities get their recommendations.
 
 **Port already in use on 5432, 27017, 8080 or 5173**
 
