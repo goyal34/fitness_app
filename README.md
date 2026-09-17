@@ -254,9 +254,17 @@ Create a Gemini API key using Google AI Studio.
 Set these environment variables:
 
 ```text
-GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta
+GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=
 GEMINI_API_KEY=YOUR_API_KEY
 ```
+
+`GeminiService` builds the request URI by concatenating the two values directly:
+
+```java
+.uri(geminiApiUrl + geminiApiKey)
+```
+
+so `GEMINI_URL` must be the full model endpoint and must end with the trailing `?key=`.
 
 **Never commit your actual API key to GitHub.**
 
@@ -265,7 +273,7 @@ The AI Service reads these values through:
 ```yaml
 gemini:
   api:
-    url: ${GEMINI_API_URL}
+    url: ${GEMINI_URL}
     key: ${GEMINI_API_KEY}
 ```
 
