@@ -170,10 +170,7 @@ Install the following:
 * Maven 3.9+
 * Node.js
 * npm
-* PostgreSQL
-* MongoDB
-* RabbitMQ
-* Keycloak
+* Docker Desktop (recommended) **or** local installations of PostgreSQL, MongoDB, RabbitMQ and Keycloak
 * Google Gemini API key
 
 ---
@@ -375,7 +372,7 @@ Invoke-RestMethod -Method Post -Uri "$KC/admin/realms/fitness-oauth2/clients" -H
 
 Invoke-RestMethod -Method Post -Uri "$KC/admin/realms/fitness-oauth2/users" -Headers $H -Body @'
 {"username":"testuser","email":"testuser@fitness.local","emailVerified":true,"firstName":"Test",
- "lastName":"User","enabled":true,"credentials":[{"type":"password","value":"test123","temporary":false}]}
+ "lastName":"User","enabled":true,"credentials":[{"type":"password","value":"test1234","temporary":false}]}
 '@
 ```
 
@@ -385,6 +382,63 @@ claims to auto-register users, so the test user needs an email, first name and l
 ---
 
 # ▶️ Running the Application
+
+## ⚡ Quick Start (single command)
+
+If Docker Desktop, Java 17+, Maven 3.9+ and Node.js 18+ are installed, start the
+whole application from the repository root with one command:
+
+```powershell
+.\start-all.ps1
+```
+
+or double-click `start-all.cmd`.
+
+The command:
+
+1. starts **PostgreSQL, MongoDB, RabbitMQ and Keycloak** with Docker Compose
+   (reusing any of them that are already listening on their ports),
+2. creates the `fitness-oauth2` realm, `oauth2-pkce-client` and the
+   `testuser` / `test1234` demo account in Keycloak, and turns on self sign-up
+   (anyone can click **Create account** on the welcome screen; passwords need
+   at least 8 characters),
+3. starts the **Config Server → Eureka → User/Activity/AI Services → Gateway**
+   in the required order,
+4. starts the **React frontend**, and
+5. opens <http://localhost:5173>.
+
+Logs are written to `.logs/`. Stop everything with:
+
+```powershell
+.\stop-all.ps1
+```
+
+Use `.\stop-all.ps1 -KeepInfra` to stop the Spring Boot/frontend processes but
+leave the Docker containers running.
+
+Optional `.env` configuration:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Then edit `.env` to set your Gemini key or a different PostgreSQL password.
+Values already exported in your shell take precedence. The launcher flags are:
+
+| Flag | Meaning |
+| ---- | ------- |
+| `-SkipInfra` | Do not start Docker containers; use already-running infrastructure. |
+| `-SkipFrontend` | Start only the backend and infrastructure. |
+| `-NoBrowser` | Do not open the browser at the end. |
+| `-StartupTimeoutSeconds 600` | Allow more time for the first Maven build. |
+
+> The first run can take several minutes because Maven and npm download
+> dependencies, and Keycloak builds its database for the first time. Later runs
+> are much faster. Re-running `start-all.ps1` is safe: services that are already
+> listening on their ports are left alone.
+
+The manual steps below remain available if you prefer to start each service
+yourself or run them from your IDE.
 
 Start the services in the following order:
 
@@ -503,25 +557,36 @@ http://localhost:5173
 
 All frontend requests are routed through the API Gateway.
 
-## User Service
+Every request needs a Keycloak access token:
 
-### Register User
-
-```http
-POST /api/users/register
+```text
+Authorization: Bearer <access-token>
 ```
 
-### Get User Profile
+Each service checks the token itself and identifies the caller from its `sub`
+claim, so you can only see and change your own data. Requests without a valid
+token get `401`, including requests that skip the gateway and call a service
+port directly. Another user's activity or recommendation answers `404`.
+
+## User Service
+
+### Get My Profile
+
+```http
+GET /api/users/me
+```
+
+### Get User Profile (own profile only)
 
 ```http
 GET /api/users/{userId}
 ```
 
-### Validate User
+### Internal endpoints
 
-```http
-GET /api/users/{userId}/validate
-```
+`POST /api/users/register` and `GET /api/users/{userId}/validate` are used by the
+gateway and the Activity Service only. The gateway blocks them for browsers.
+The profile is created automatically from the token on your first request.
 
 ---
 
@@ -531,12 +596,6 @@ GET /api/users/{userId}/validate
 
 ```http
 POST /api/activities
-```
-
-Required header:
-
-```text
-X-User-ID: <user-id>
 ```
 
 Example request:
@@ -549,16 +608,10 @@ Example request:
 }
 ```
 
-### Get User Activities
+### Get My Activities
 
 ```http
 GET /api/activities
-```
-
-Required header:
-
-```text
-X-User-ID: <user-id>
 ```
 
 ### Get Activity
@@ -567,15 +620,23 @@ X-User-ID: <user-id>
 GET /api/activities/{activityId}
 ```
 
+### Delete Activity
+
+```http
+DELETE /api/activities/{activityId}
+```
+
 ---
 
 ## AI Recommendation Service
 
-### Get User Recommendations
+### Get My Recommendations
 
 ```http
 GET /api/recommendations/user/{userId}
 ```
+
+`{userId}` must be your own Keycloak user id.
 
 ### Get Activity Recommendation
 
@@ -662,7 +723,7 @@ To exercise the full chain from the command line, fetch a token and call the Gat
 ```powershell
 $t = (Invoke-RestMethod -Method Post `
   -Uri "http://localhost:8181/realms/fitness-oauth2/protocol/openid-connect/token" `
-  -Body @{client_id='oauth2-pkce-client';username='testuser';password='test123';
+  -Body @{client_id='oauth2-pkce-client';username='testuser';password='test1234';
           grant_type='password';scope='openid profile email'}).access_token
 
 Invoke-RestMethod -Uri "http://localhost:8080/api/activities" -Headers @{Authorization="Bearer $t"}
@@ -683,12 +744,12 @@ connection is rejected at startup. Start the service with an explicit zone:
 mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Duser.timezone=Asia/Kolkata"
 ```
 
-**AI Service fails at startup with an unresolved placeholder**
+**AI Service starts but logs `GEMINI_API_KEY is not set`**
 
-`GeminiService` injects `${gemini.api.key}` with `@Value`, so `GEMINI_API_KEY` must be set in the
-environment before launch or the context will not start. Without a valid key the service still
-starts and consumes RabbitMQ messages, but the Gemini call fails and no recommendations are
-generated.
+The AI Service only needs the Gemini key when it processes an activity. Without
+`GEMINI_API_KEY` it still starts and consumes RabbitMQ messages, but the Gemini
+call fails and no recommendations are generated. Set the key in `.env` (or the
+environment) and restart the service.
 
 **No recommendations appear for new activities**
 

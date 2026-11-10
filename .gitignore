@@ -1,0 +1,19 @@
+# Local environment and launcher state
+.env
+.run/
+.logs/
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Java
+**/target/
+*.class
+
+# Node
+**/node_modules/
+**/dist/
+npm-debug.log*
