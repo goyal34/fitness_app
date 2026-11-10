@@ -5,10 +5,17 @@ export const ACTIVITY_STYLES = {
     RUNNING: { label: 'Running', color: '#ef6c00', emoji: '🏃' },
     WALKING: { label: 'Walking', color: '#2e7d32', emoji: '🚶' },
     CYCLING: { label: 'Cycling', color: '#1565c0', emoji: '🚴' },
+    SWIMMING: { label: 'Swimming', color: '#0097a7', emoji: '🏊' },
+    WEIGHT_TRAINING: { label: 'Weight Training', color: '#5d4037', emoji: '🏋️' },
+    YOGA: { label: 'Yoga', color: '#7b1fa2', emoji: '🧘' },
+    HIIT: { label: 'HIIT', color: '#c62828', emoji: '🔥' },
+    CARDIO: { label: 'Cardio', color: '#ad1457', emoji: '❤️' },
+    STRETCHING: { label: 'Stretching', color: '#00695c', emoji: '🤸' },
+    OTHER: { label: 'Other', color: '#616161', emoji: '⭐' },
 };
 
 export const activityStyle = (type) =>
-    ACTIVITY_STYLES[type] ?? { label: type ?? 'Activity', color: '#616161', emoji: '🏋️' };
+    ACTIVITY_STYLES[type] ?? { label: type ?? 'Activity', color: '#616161', emoji: '⭐' };
 
 const theme = createTheme({
     palette: {

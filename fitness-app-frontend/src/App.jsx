@@ -6,12 +6,13 @@ import { useCallback, useContext, useEffect, useState } from "react";
 import { AuthContext } from "react-oauth2-code-pkce";
 import { useDispatch } from "react-redux";
 import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router";
-import { setCredentials } from "./store/authSlice";
+import { logout, setCredentials } from "./store/authSlice";
 import ActivityForm from "./components/ActivityForm";
 import ActivityList from "./components/ActivityList";
 import ActivityDetail from "./components/ActivityDetail";
 import { deleteActivity, getActivities } from "./services/api";
 import theme from "./theme";
+import { SignUpContext } from "./signUp";
 
 const ActivitiesPage = ({ notify }) => {
   const [activities, setActivities] = useState([]);
@@ -60,12 +61,19 @@ const ActivitiesPage = ({ notify }) => {
 
 function App() {
   const { token, tokenData, logIn, logOut } = useContext(AuthContext);
+  const startSignUp = useContext(SignUpContext);
   const dispatch = useDispatch();
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' });
 
   const notify = useCallback((message, severity = 'success') => {
     setToast({ open: true, message, severity });
   }, []);
+
+  // Clear the saved login as well as the Keycloak session.
+  const handleLogout = () => {
+    dispatch(logout());
+    logOut();
+  };
 
   useEffect(() => {
     if (token) {
@@ -87,9 +95,17 @@ function App() {
             <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 3 }}>
               Track your workouts and get AI-powered recommendations.
             </Typography>
-            <Button variant="contained" size="large" onClick={() => logIn()}>
-              Login
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Button variant="contained" size="large" onClick={() => logIn()}>
+                Login
+              </Button>
+              <Button variant="outlined" size="large" onClick={startSignUp}>
+                Create account
+              </Button>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              New here? Create a free account with your email.
+            </Typography>
           </Box>
         ) : (
           <>
@@ -103,7 +119,7 @@ function App() {
                     {tokenData.given_name}
                   </Typography>
                 )}
-                <Button variant="outlined" color="secondary" onClick={logOut}>Logout</Button>
+                <Button variant="outlined" color="secondary" onClick={handleLogout}>Logout</Button>
               </Toolbar>
             </AppBar>
 

@@ -1,0 +1,74 @@
+# Infrastructure only. The Spring Boot services and the React frontend run
+# locally (via Maven/npm) so they can be debugged from your IDE.
+#
+# Start everything with:  .\start-all.ps1
+# Stop everything with:   .\stop-all.ps1
+#
+# This file can also be used on its own:
+#   docker compose up -d
+#   docker compose logs -f
+#   docker compose stop
+
+name: fitness-app
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: fitness_user_db
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d fitness_user_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep -q 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_PORT: "8080"
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "127.0.0.1:8181:8080"
+    volumes:
+      # Keeps realms and user accounts when the container is recreated.
+      - keycloak-data:/opt/keycloak/data
+
+volumes:
+  postgres-data:
+  mongo-data:
+  keycloak-data:

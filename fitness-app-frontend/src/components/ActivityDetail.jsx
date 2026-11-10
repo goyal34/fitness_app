@@ -2,10 +2,10 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { getActivity, getActivityDetail } from '../services/api';
 import {
-    Box, Button, Card, CardContent, Chip, CircularProgress, Divider,
-    Grid2, Skeleton, Typography
+    Box, Button, Card, CardContent, Chip, Grid2, Skeleton, Typography
 } from '@mui/material';
 import { activityStyle } from '../theme';
+import AiReport from './AiReport';
 
 // The recommendation is produced asynchronously via RabbitMQ, so it may not
 // exist for a few seconds after an activity is created. Poll briefly rather
@@ -18,17 +18,6 @@ const Metric = ({ label, value }) => (
         <Typography variant="caption" color="text.secondary">{label}</Typography>
         <Typography variant="h6">{value}</Typography>
     </Grid2>
-);
-
-const Bullets = ({ title, items }) => (
-    <>
-        <Typography variant="h6" gutterBottom>{title}</Typography>
-        {items?.length ? items.map((item, index) => (
-            <Typography key={index} paragraph>• {item}</Typography>
-        )) : (
-            <Typography color="text.secondary" paragraph>Nothing reported.</Typography>
-        )}
-    </>
 );
 
 const ActivityDetail = () => {
@@ -139,35 +128,7 @@ const ActivityDetail = () => {
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardContent>
-                    <Typography variant="h5" gutterBottom>AI Recommendation</Typography>
-
-                    {recommendation ? (
-                        <>
-                            <Typography variant="h6">Analysis</Typography>
-                            <Typography paragraph>{recommendation.recommendation}</Typography>
-                            <Divider sx={{ my: 2 }} />
-                            <Bullets title="Improvements" items={recommendation.improvements} />
-                            <Divider sx={{ my: 2 }} />
-                            <Bullets title="Suggestions" items={recommendation.suggestions} />
-                            <Divider sx={{ my: 2 }} />
-                            <Bullets title="Safety Guidelines" items={recommendation.safety} />
-                        </>
-                    ) : waiting ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2 }}>
-                            <CircularProgress size={20} />
-                            <Typography color="text.secondary">
-                                Generating your report… this usually takes a few seconds.
-                            </Typography>
-                        </Box>
-                    ) : (
-                        <Typography color="text.secondary">
-                            No recommendation has been generated for this activity yet.
-                        </Typography>
-                    )}
-                </CardContent>
-            </Card>
+            <AiReport recommendation={recommendation} waiting={waiting} />
         </Box>
     )
 }

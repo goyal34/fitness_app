@@ -6,16 +6,12 @@ const api = axios.create({
     baseURL:API_URL
 });
 
+// The gateway works out who the user is from the token itself.
 api.interceptors.request.use((config) => {
-    const userId = localStorage.getItem('userId');
     const token = localStorage.getItem('token');
 
     if (token) {
         config.headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    if (userId) {
-        config.headers['X-User-ID'] = userId;
     }
     return config;
 }

@@ -8,7 +8,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -77,20 +79,22 @@ public class ActivityService {
                 .collect(Collectors.toList());
     }
 
-    public ActivityResponse getActivityById(String activityId) {
-        return activityRepository.findById(activityId)
-                .map(this::mapToResponse)
-                .orElseThrow(() -> new RuntimeException("Activity not found with id: " + activityId));
+    public ActivityResponse getActivityById(String activityId, String userId) {
+        return mapToResponse(findOwnedActivity(activityId, userId));
     }
 
     public void deleteActivity(String activityId, String userId) {
-        Activity activity = activityRepository.findById(activityId)
-                .orElseThrow(() -> new RuntimeException("Activity not found with id: " + activityId));
+        activityRepository.delete(findOwnedActivity(activityId, userId));
+    }
 
-        if (!activity.getUserId().equals(userId)) {
-            throw new RuntimeException("Activity does not belong to user: " + userId);
-        }
-
-        activityRepository.delete(activity);
+    /**
+     * Loads an activity only if it belongs to the given user. "Not found" and
+     * "not yours" give the same 404, so other users' ids can't be probed.
+     */
+    private Activity findOwnedActivity(String activityId, String userId) {
+        return activityRepository.findById(activityId)
+                .filter(activity -> activity.getUserId() != null && activity.getUserId().equals(userId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Activity not found with id: " + activityId));
     }
 }

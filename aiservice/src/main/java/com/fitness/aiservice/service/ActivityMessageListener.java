@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 @Service
 @Slf4j
@@ -16,11 +17,45 @@ public class ActivityMessageListener {
     private final ActivityAIService aiService;
     private final RecommendationRepository recommendationRepository;
 
+    /**
+     * Never throws: a thrown exception would put the message back on the queue
+     * and retry it forever (burning Gemini quota). Failures are saved as a
+     * FAILED report instead, so the UI can show what went wrong.
+     */
     @RabbitListener(queues = "activity.queue")
     public void processActivity(Activity activity) {
         log.info("Received activity for processing: {}", activity.getId());
-//        log.info("Generated Recommendation: {}", aiService.generateRecommendation(activity));
-        Recommendation recommendation = aiService.generateRecommendation(activity);
-        recommendationRepository.save(recommendation);
+
+        Recommendation result;
+        try {
+            result = aiService.generateRecommendation(activity);
+        } catch (WebClientResponseException e) {
+            log.error("Gemini request failed for activity {}: {} {}", activity.getId(),
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            result = aiService.failedRecommendation(activity, describe(e));
+        } catch (Exception e) {
+            log.error("Could not generate a report for activity {}", activity.getId(), e);
+            result = aiService.failedRecommendation(activity, e.getMessage());
+        }
+
+        // One report per activity: replace any earlier one (e.g. a redelivered message).
+        Recommendation toSave = result;
+        recommendationRepository.findFirstByActivityIdOrderByCreatedAtDesc(activity.getId())
+                .ifPresent(existing -> toSave.setId(existing.getId()));
+        recommendationRepository.save(toSave);
+    }
+
+    private String describe(WebClientResponseException e) {
+        int status = e.getStatusCode().value();
+        if (status == 400 || status == 401 || status == 403) {
+            return "The Gemini API rejected the request. Check the API key and model name.";
+        }
+        if (status == 404) {
+            return "The Gemini model in the configuration was not found.";
+        }
+        if (status == 429) {
+            return "The Gemini API quota or rate limit was reached. Try again later.";
+        }
+        return "The Gemini API is unavailable right now (HTTP " + status + ").";
     }
 }

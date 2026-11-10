@@ -1,185 +1,132 @@
 package com.fitness.aiservice.service;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fitness.aiservice.model.Activity;
+import com.fitness.aiservice.model.AiReport;
 import com.fitness.aiservice.model.Recommendation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class ActivityAIService {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
     private final GeminiService geminiService;
 
+    /**
+     * Asks Gemini for a structured report on the activity.
+     *
+     * @throws IllegalStateException if Gemini is not configured or returns no usable report
+     */
     public Recommendation generateRecommendation(Activity activity) {
-        String prompt = createPromptForActivity(activity);
-        String aiResponse = geminiService.getAnswer(prompt);
-        log.info("RESPONSE FROM AI: {} ", aiResponse);
-        return processAiResponse(activity, aiResponse);
-    }
-
-    private Recommendation processAiResponse(Activity activity, String aiResponse) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode rootNode = mapper.readTree(aiResponse);
-
-            JsonNode textNode = rootNode.path("candidates")
-                    .get(0)
-                    .path("content")
-                    .path("parts")
-                    .get(0)
-                    .path("text");
-
-            String jsonContent = textNode.asText()
-                    .replaceAll("```json\\n","")
-                    .replaceAll("\\n```", "")
-                    .trim();
-
-//            log.info("PARSED RESPONSE FROM AI: {} ", jsonContent);
-
-            JsonNode analysisJson = mapper.readTree(jsonContent);
-            JsonNode analysisNode = analysisJson.path("analysis");
-            
-            StringBuilder fullAnalysis = new StringBuilder();
-            addAnalysisSection(fullAnalysis, analysisNode, "overall", "Overall:");
-            addAnalysisSection(fullAnalysis, analysisNode, "pace", "Pace:");
-            addAnalysisSection(fullAnalysis, analysisNode, "heartRate", "Heart Rate:");
-            addAnalysisSection(fullAnalysis, analysisNode, "caloriesBurned", "Calories:");
-
-            List<String> improvements = extractImprovements(analysisJson.path("improvements"));
-            List<String> suggestions = extractSuggestions(analysisJson.path("suggestions"));
-            List<String> safety = extractSafetyGuidelines(analysisJson.path("safety"));
-
-            return Recommendation.builder()
-                    .activityId(activity.getId())
-                    .userId(activity.getUserId())
-                    .activityType(activity.getType())
-                    .recommendation(fullAnalysis.toString().trim())
-                    .improvements(improvements)
-                    .suggestions(suggestions)
-                    .safety(safety)
-                    .createdAt(LocalDateTime.now())
-                    .build();
-            
-        } catch (Exception e) {
-            e.printStackTrace();
-            return createDefaultRecommendation(activity);
+        if (!geminiService.isConfigured()) {
+            throw new IllegalStateException("The AI service has no Gemini API key configured.");
         }
-    }
+        String response = geminiService.generateReport(createPrompt(activity));
+        AiReport report = parseReport(response);
+        log.info("Generated report for activity {} (score {})", activity.getId(), report.getScore());
 
-    private Recommendation createDefaultRecommendation(Activity activity) {
         return Recommendation.builder()
                 .activityId(activity.getId())
                 .userId(activity.getUserId())
                 .activityType(activity.getType())
-                .recommendation("Unable to generate detailed analysis")
-                .improvements(Collections.singletonList("Continue with your current routine"))
-                .suggestions(Collections.singletonList("Consider consulting a fitness professional"))
-                .safety(Arrays.asList(
-                        "Always warm up before exercise",
-                        "Stay hydrated",
-                        "Listen to your body"
-                ))
+                .status(Recommendation.STATUS_COMPLETED)
+                .report(report)
+                .model(geminiService.modelName())
+                .recommendation(report.getSummary())
+                .improvements(report.getImprovements().stream()
+                        .map(i -> i.getArea() + ": " + i.getRecommendation()).toList())
+                .suggestions(report.getNextWorkouts().stream()
+                        .map(w -> w.getName() + ": " + w.getDescription()).toList())
+                .safety(report.getSafety())
                 .createdAt(LocalDateTime.now())
                 .build();
     }
 
-    private List<String> extractSafetyGuidelines(JsonNode safetyNode) {
-        List<String> safety = new ArrayList<>();
-        if (safetyNode.isArray()) {
-            safetyNode.forEach(item -> safety.add(item.asText()));
-        }
-        return safety.isEmpty() ?
-                Collections.singletonList("Follow general safety guidelines") :
-                safety;
+    /** A FAILED record, so the UI can stop waiting and explain what happened. */
+    public Recommendation failedRecommendation(Activity activity, String reason) {
+        return Recommendation.builder()
+                .activityId(activity.getId())
+                .userId(activity.getUserId())
+                .activityType(activity.getType())
+                .status(Recommendation.STATUS_FAILED)
+                .errorMessage(reason)
+                .createdAt(LocalDateTime.now())
+                .build();
     }
 
-    private List<String> extractSuggestions(JsonNode suggestionsNode) {
-        List<String> suggestions = new ArrayList<>();
-        if (suggestionsNode.isArray()) {
-            suggestionsNode.forEach(suggestion -> {
-                String workout = suggestion.path("workout").asText();
-                String description = suggestion.path("description").asText();
-                suggestions.add(String.format("%s: %s", workout, description));
-            });
-        }
-        return suggestions.isEmpty() ?
-                Collections.singletonList("No specific suggestions provided") :
-                suggestions;
-    }
-
-    private List<String> extractImprovements(JsonNode improvementsNode) {
-        List<String> improvements = new ArrayList<>();
-        if (improvementsNode.isArray()) {
-            improvementsNode.forEach(improvement -> {
-                String area = improvement.path("area").asText();
-                String detail = improvement.path("recommendation").asText();
-                improvements.add(String.format("%s: %s", area, detail));
-            });
-        }
-        return improvements.isEmpty() ?
-                Collections.singletonList("No specific improvements provided") :
-                improvements;
-    }
-
-    private void addAnalysisSection(StringBuilder fullAnalysis, JsonNode analysisNode, String key, String prefix) {
-        if (!analysisNode.path(key).isMissingNode()) {
-            fullAnalysis.append(prefix)
-                    .append(analysisNode.path(key).asText())
-                    .append("\n\n");
-        }
-    }
-
-    private String createPromptForActivity(Activity activity) {
-        return String.format("""
-        Analyze this fitness activity and provide detailed recommendations in the following EXACT JSON format:
-        {
-          "analysis": {
-            "overall": "Overall analysis here",
-            "pace": "Pace analysis here",
-            "heartRate": "Heart rate analysis here",
-            "caloriesBurned": "Calories analysis here"
-          },
-          "improvements": [
-            {
-              "area": "Area name",
-              "recommendation": "Detailed recommendation"
+    private AiReport parseReport(String response) {
+        try {
+            JsonNode root = MAPPER.readTree(response);
+            JsonNode text = root.path("candidates").path(0).path("content").path("parts").path(0).path("text");
+            if (text.isMissingNode() || text.asText().isBlank()) {
+                String reason = root.path("promptFeedback").path("blockReason").asText(
+                        root.path("candidates").path(0).path("finishReason").asText("empty response"));
+                throw new IllegalStateException("Gemini returned no report (" + reason + ").");
             }
-          ],
-          "suggestions": [
-            {
-              "workout": "Workout name",
-              "description": "Detailed workout description"
-            }
-          ],
-          "safety": [
-            "Safety point 1",
-            "Safety point 2"
-          ]
+            return clean(MAPPER.readValue(text.asText(), AiReport.class));
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not read Gemini's report: " + e.getMessage(), e);
         }
+    }
 
-        Analyze this activity:
-        Activity Type: %s
-        Duration: %d minutes
-        Calories Burned: %d
-        Additional Metrics: %s
-        
-        Provide detailed analysis focusing on performance, improvements, next workout suggestions, and safety guidelines.
-        Ensure the response follows the EXACT JSON format shown above.
-        """,
+    /** Guards against missing or out-of-range values so the UI never has to. */
+    private AiReport clean(AiReport r) {
+        if (r.getSummary() == null || r.getSummary().isBlank()) {
+            throw new IllegalStateException("Gemini's report had no summary.");
+        }
+        r.setScore(r.getScore() == null ? null : Math.max(0, Math.min(100, r.getScore())));
+        r.setAnalysis(nonNull(r.getAnalysis()));
+        r.setStrengths(nonNull(r.getStrengths()));
+        r.setImprovements(nonNull(r.getImprovements()));
+        r.setNextWorkouts(nonNull(r.getNextWorkouts()));
+        r.setSafety(nonNull(r.getSafety()));
+        r.setRecovery(nonNull(r.getRecovery()));
+        return r;
+    }
+
+    private static <T> List<T> nonNull(List<T> list) {
+        return list == null ? List.of() : list.stream().filter(Objects::nonNull).toList();
+    }
+
+    private String createPrompt(Activity activity) {
+        Map<String, Object> metrics = activity.getAdditionalMetrics();
+        return """
+                You are a supportive, knowledgeable fitness coach. Write a report on the workout below
+                for the person who did it. Address them as "you".
+
+                Rules:
+                - Base the analysis only on the data given. Do not invent heart rate, pace, distance
+                  or other numbers that are not provided; if something useful is missing, you may
+                  suggest tracking it.
+                - Keep every sentence short, plain and specific. No medical diagnoses.
+                - The score reflects how good this session is for its type, length and calorie burn.
+
+                Workout:
+                - Type: %s
+                - Duration: %s minutes
+                - Calories burned: %s
+                - Started at: %s
+                - Other metrics: %s
+                """.formatted(
                 activity.getType(),
-                activity.getDuration(),
-                activity.getCaloriesBurned(),
-                activity.getAdditionalMetrics()
-        );
+                Objects.toString(activity.getDuration(), "unknown"),
+                Objects.toString(activity.getCaloriesBurned(), "unknown"),
+                Objects.toString(activity.getStartTime(), "unknown"),
+                metrics == null || metrics.isEmpty() ? "none" : metrics);
     }
 }
