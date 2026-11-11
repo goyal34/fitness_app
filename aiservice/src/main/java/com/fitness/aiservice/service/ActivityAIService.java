@@ -1,9 +1,6 @@
 package com.fitness.aiservice.service;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fitness.aiservice.model.Activity;
+import com.fitness.common.event.ActivityEvent;
 import com.fitness.aiservice.model.AiReport;
 import com.fitness.aiservice.model.Recommendation;
 import lombok.RequiredArgsConstructor;
@@ -20,9 +17,6 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class ActivityAIService {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
     private final GeminiService geminiService;
 
     /**
@@ -30,12 +24,11 @@ public class ActivityAIService {
      *
      * @throws IllegalStateException if Gemini is not configured or returns no usable report
      */
-    public Recommendation generateRecommendation(Activity activity) {
+    public Recommendation generateRecommendation(ActivityEvent activity) {
         if (!geminiService.isConfigured()) {
             throw new IllegalStateException("The AI service has no Gemini API key configured.");
         }
-        String response = geminiService.generateReport(createPrompt(activity));
-        AiReport report = parseReport(response);
+        AiReport report = clean(geminiService.generateReport(createPrompt(activity)));
         log.info("Generated report for activity {} (score {})", activity.getId(), report.getScore());
 
         return Recommendation.builder()
@@ -56,7 +49,7 @@ public class ActivityAIService {
     }
 
     /** A FAILED record, so the UI can stop waiting and explain what happened. */
-    public Recommendation failedRecommendation(Activity activity, String reason) {
+    public Recommendation failedRecommendation(ActivityEvent activity, String reason) {
         return Recommendation.builder()
                 .activityId(activity.getId())
                 .userId(activity.getUserId())
@@ -65,23 +58,6 @@ public class ActivityAIService {
                 .errorMessage(reason)
                 .createdAt(LocalDateTime.now())
                 .build();
-    }
-
-    private AiReport parseReport(String response) {
-        try {
-            JsonNode root = MAPPER.readTree(response);
-            JsonNode text = root.path("candidates").path(0).path("content").path("parts").path(0).path("text");
-            if (text.isMissingNode() || text.asText().isBlank()) {
-                String reason = root.path("promptFeedback").path("blockReason").asText(
-                        root.path("candidates").path(0).path("finishReason").asText("empty response"));
-                throw new IllegalStateException("Gemini returned no report (" + reason + ").");
-            }
-            return clean(MAPPER.readValue(text.asText(), AiReport.class));
-        } catch (IllegalStateException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not read Gemini's report: " + e.getMessage(), e);
-        }
     }
 
     /** Guards against missing or out-of-range values so the UI never has to. */
@@ -103,7 +79,7 @@ public class ActivityAIService {
         return list == null ? List.of() : list.stream().filter(Objects::nonNull).toList();
     }
 
-    private String createPrompt(Activity activity) {
+    private String createPrompt(ActivityEvent activity) {
         Map<String, Object> metrics = activity.getAdditionalMetrics();
         return """
                 You are a supportive, knowledgeable fitness coach. Write a report on the workout below

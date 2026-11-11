@@ -11,43 +11,35 @@ import ActivityForm from "./components/ActivityForm";
 import ActivityList from "./components/ActivityList";
 import ActivityDetail from "./components/ActivityDetail";
 import AnalyticsDashboard from "./components/analytics/AnalyticsDashboard";
-import { deleteActivity, getActivities } from "./services/api";
+import {
+  fitnessApi,
+  useDeleteActivityMutation,
+  useGetActivitiesQuery,
+} from "./services/fitnessApi";
 import theme from "./theme";
 import { SignUpContext } from "./signUp";
 
 const ActivitiesPage = ({ notify }) => {
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Cached by RTK Query: revisiting the page reuses the list, and mutations
+  // invalidate it so it refetches in the background.
+  const { data: activities = [], isLoading, isError } = useGetActivitiesQuery();
+  const [deleteActivity] = useDeleteActivityMutation();
 
-  const fetchActivities = useCallback(async () => {
-    try {
-      const response = await getActivities();
-      setActivities(response.data ?? []);
-    } catch (error) {
-      console.error(error);
-      notify('Could not load your activities.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [notify]);
+  useEffect(() => {
+    if (isError) notify('Could not load your activities.', 'error');
+  }, [isError, notify]);
 
-  useEffect(() => { fetchActivities(); }, [fetchActivities]);
-
-  // Prepend the newly created activity instead of reloading the page.
-  const handleAdded = (activity) => {
-    setActivities((prev) => [activity, ...prev]);
+  const handleAdded = () => {
     notify('Activity added. Your AI report is being generated.', 'success');
   };
 
   const handleDelete = async (activity) => {
-    const previous = activities;
-    setActivities((prev) => prev.filter((a) => a.id !== activity.id));
     try {
-      await deleteActivity(activity.id);
+      // The cache is updated optimistically and rolled back on failure.
+      await deleteActivity(activity.id).unwrap();
       notify('Activity deleted.', 'success');
     } catch (error) {
       console.error(error);
-      setActivities(previous);   // roll back the optimistic removal
       notify('Could not delete the activity.', 'error');
     }
   };
@@ -55,7 +47,7 @@ const ActivitiesPage = ({ notify }) => {
   return (
     <Box>
       <ActivityForm onActivityAdded={handleAdded} onError={(m) => notify(m, 'error')} />
-      <ActivityList activities={activities} loading={loading} onDelete={handleDelete} />
+      <ActivityList activities={activities} loading={isLoading} onDelete={handleDelete} />
     </Box>
   );
 };
@@ -95,9 +87,11 @@ function App() {
     setToast({ open: true, message, severity });
   }, []);
 
-  // Clear the saved login as well as the Keycloak session.
+  // Clear the saved login as well as the Keycloak session, and drop any
+  // cached API data so the next user never sees the previous user's records.
   const handleLogout = () => {
     dispatch(logout());
+    dispatch(fitnessApi.util.resetApiState());
     logOut();
   };
 

@@ -653,6 +653,14 @@ try {
         throw "Maven (mvn) was not found. Install Maven 3.9+ or add it to PATH."
     }
 
+    # The services depend on fitness-common from the local repository, so it
+    # must be installed before Maven starts them.
+    Write-Step "Building the shared module (fitness-common)"
+    & mvn -q -f (Join-Path $Root 'fitness-common\pom.xml') install -DskipTests
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not build fitness-common. See the Maven output above."
+    }
+
     if (-not $SkipInfra) {
         Start-Infrastructure
     }

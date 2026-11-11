@@ -117,7 +117,7 @@ The application allows authenticated users to track fitness activities and recei
 * Vite
 * Material UI
 * Redux Toolkit
-* Axios
+* RTK Query
 * OAuth2 PKCE
 
 ---
@@ -126,6 +126,12 @@ The application allows authenticated users to track fitness activities and recei
 
 ```text
 fitness-app-microservices/
+│
+├── pom.xml                     # aggregator: builds every module with one command
+│
+├── fitness-common/             # shared Spring config + DTO/event contracts
+│   ├── src/main/java/com/fitness/common/
+│   └── pom.xml
 │
 ├── activityservice/
 │   ├── src/
@@ -157,6 +163,35 @@ fitness-app-microservices/
     ├── package.json
     └── vite.config.js
 ```
+
+### Shared module (`fitness-common`)
+
+Code that used to be copy-pasted across services lives here instead of in a
+third-party library:
+
+| Shared item | Package | Used by |
+| --- | --- | --- |
+| Resource-server `SecurityFilterChain` | `com.fitness.common.config` | User, Activity, AI |
+| RabbitMQ queue/exchange/binding + JSON converter | `com.fitness.common.config` | Activity, AI |
+| `UserResponse` | `com.fitness.common.dto` | User Service, Gateway |
+| `ActivityEvent` (RabbitMQ message) | `com.fitness.common.event` | Activity Service, AI Service |
+
+The configuration classes are registered as Spring Boot auto-configurations
+(`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`),
+so a service gets them just by depending on the module. They apply only when
+the matching starter and properties are present, and a service can still
+override any bean.
+
+Because the services resolve `fitness-common` from the local Maven repository,
+install it before running a service on its own:
+
+```bash
+mvn install -DskipTests          # from the repository root: builds all modules
+# or only the shared module:
+mvn -f fitness-common/pom.xml install -DskipTests
+```
+
+`start-all.ps1` does this automatically.
 
 ---
 
@@ -440,7 +475,16 @@ Values already exported in your shell take precedence. The launcher flags are:
 The manual steps below remain available if you prefer to start each service
 yourself or run them from your IDE.
 
-Start the services in the following order:
+Start the services in the following order.
+
+> First install the shared module once, otherwise Maven cannot resolve
+> `com.fitness:fitness-common` when building the services:
+>
+> ```bash
+> mvn -f fitness-common/pom.xml install -DskipTests
+> ```
+>
+> (or `mvn install -DskipTests` from the repository root to build everything).
 
 ### 1. Config Server
 

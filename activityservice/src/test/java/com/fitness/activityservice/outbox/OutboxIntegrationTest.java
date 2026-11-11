@@ -5,6 +5,7 @@ import com.fitness.activityservice.dto.ActivityRequest;
 import com.fitness.activityservice.dto.ActivityResponse;
 import com.fitness.activityservice.model.Activity;
 import com.fitness.activityservice.model.ActivityType;
+import com.fitness.common.event.ActivityEvent;
 import com.fitness.activityservice.service.ActivityService;
 import com.fitness.activityservice.service.UserValidationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -110,7 +111,7 @@ class OutboxIntegrationTest {
         assertThat(published.getStatus()).isEqualTo(OutboxStatus.PUBLISHED);
         assertThat(published.getPublishedAt()).isNotNull();
 
-        Activity message = (Activity) rabbitTemplate.receiveAndConvert(QUEUE, 5000);
+        ActivityEvent message = (ActivityEvent) rabbitTemplate.receiveAndConvert(QUEUE, 5000);
         assertThat(message).isNotNull();
         assertThat(message.getId()).isEqualTo(created.getId());
         assertThat(message.getUserId()).isEqualTo("user-1");

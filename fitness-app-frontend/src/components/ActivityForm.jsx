@@ -3,7 +3,7 @@ import {
     MenuItem, TextField, Typography
 } from '@mui/material'
 import React, { useState } from 'react'
-import { addActivity } from '../services/api'
+import { useAddActivityMutation } from '../services/fitnessApi'
 import { ACTIVITY_STYLES } from '../theme'
 
 // Local wall-clock time as "YYYY-MM-DDTHH:mm" (what <input type="datetime-local"> uses).
@@ -19,7 +19,8 @@ const empty = () => ({ type: 'RUNNING', duration: '', caloriesBurned: '', startT
 const ActivityForm = ({ onActivityAdded, onError }) => {
     const [activity, setActivity] = useState(empty);
     const [errors, setErrors] = useState({});
-    const [submitting, setSubmitting] = useState(false);
+    // The mutation tracks the in-flight state; no separate submitting flag.
+    const [addActivity, { isLoading: submitting }] = useAddActivityMutation();
 
     const validate = () => {
         const next = {};
@@ -44,23 +45,20 @@ const ActivityForm = ({ onActivityAdded, onError }) => {
         e.preventDefault();
         if (!validate()) return;
 
-        setSubmitting(true);
         try {
-            const response = await addActivity({
+            const created = await addActivity({
                 type: activity.type,
                 duration: Number(activity.duration),
                 caloriesBurned: Number(activity.caloriesBurned),
                 startTime: `${activity.startTime}:00`,
                 additionalMetrics: {},
-            });
+            }).unwrap();
             setActivity(empty());
             setErrors({});
-            onActivityAdded?.(response.data);
+            onActivityAdded?.(created);
         } catch (error) {
             console.error(error);
             onError?.('Could not add the activity. Please try again.');
-        } finally {
-            setSubmitting(false);
         }
     };
 

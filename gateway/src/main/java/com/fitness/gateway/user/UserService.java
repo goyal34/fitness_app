@@ -1,5 +1,6 @@
 package com.fitness.gateway.user;
 
+import com.fitness.common.dto.UserResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

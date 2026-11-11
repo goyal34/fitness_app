@@ -1,6 +1,6 @@
 package com.fitness.activityservice.outbox;
 
-import com.fitness.activityservice.model.Activity;
+import com.fitness.common.event.ActivityEvent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -32,7 +32,7 @@ public class OutboxEvent {
     /** Id of the activity the event is about. */
     private String aggregateId;
     /** The message body sent to RabbitMQ. */
-    private Activity payload;
+    private ActivityEvent payload;
 
     private OutboxStatus status;
     private int attempts;
@@ -42,7 +42,7 @@ public class OutboxEvent {
     private Instant createdAt;
     private Instant publishedAt;
 
-    public static OutboxEvent activityCreated(Activity activity) {
+    public static OutboxEvent activityCreated(ActivityEvent activity) {
         Instant now = Instant.now();
         return OutboxEvent.builder()
                 .eventType(ACTIVITY_CREATED)

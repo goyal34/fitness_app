@@ -4,6 +4,7 @@ import com.fitness.activityservice.ActivityRepository;
 import com.fitness.activityservice.dto.ActivityRequest;
 import com.fitness.activityservice.dto.ActivityResponse;
 import com.fitness.activityservice.model.Activity;
+import com.fitness.common.event.ActivityEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.fitness.activityservice.outbox.OutboxEvent;
@@ -51,11 +52,26 @@ public class ActivityService {
         // its event (or the reverse). OutboxPublisher sends the event to RabbitMQ.
         Activity savedActivity = transactionTemplate.execute(status -> {
             Activity saved = activityRepository.save(activity);
-            outboxEventRepository.save(OutboxEvent.activityCreated(saved));
+            outboxEventRepository.save(OutboxEvent.activityCreated(toEvent(saved)));
             return saved;
         });
 
         return mapToResponse(savedActivity);
+    }
+
+    /** The outbox stores the shared wire contract, not the MongoDB document. */
+    private static ActivityEvent toEvent(Activity activity) {
+        return ActivityEvent.builder()
+                .id(activity.getId())
+                .userId(activity.getUserId())
+                .type(activity.getType() != null ? activity.getType().name() : null)
+                .duration(activity.getDuration())
+                .caloriesBurned(activity.getCaloriesBurned())
+                .startTime(activity.getStartTime())
+                .additionalMetrics(activity.getAdditionalMetrics())
+                .createdAt(activity.getCreatedAt())
+                .updatedAt(activity.getUpdatedAt())
+                .build();
     }
 
     private void validate(ActivityRequest request) {

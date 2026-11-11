@@ -1,13 +1,14 @@
 package com.fitness.aiservice.service;
 
-import com.fitness.aiservice.model.Activity;
+import com.fitness.common.event.ActivityEvent;
 import com.fitness.aiservice.model.Recommendation;
 import com.fitness.aiservice.repository.RecommendationRepository;
+import com.google.genai.errors.ClientException;
+import com.google.genai.errors.ServerException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.Optional;
 
@@ -25,7 +26,7 @@ public class ActivityMessageListener {
      * FAILED report instead, so the UI can show what went wrong.
      */
     @RabbitListener(queues = "activity.queue")
-    public void processActivity(Activity activity) {
+    public void processActivity(ActivityEvent activity) {
         log.info("Received activity for processing: {}", activity.getId());
 
         // The outbox delivers at least once, so the same activity can arrive twice.
@@ -40,10 +41,12 @@ public class ActivityMessageListener {
         Recommendation result;
         try {
             result = aiService.generateRecommendation(activity);
-        } catch (WebClientResponseException e) {
-            log.error("Gemini request failed for activity {}: {} {}", activity.getId(),
-                    e.getStatusCode(), e.getResponseBodyAsString());
-            result = aiService.failedRecommendation(activity, describe(e));
+        } catch (ClientException e) {
+            log.error("Gemini rejected the request for activity {}: {}", activity.getId(), e.getMessage());
+            result = aiService.failedRecommendation(activity, describeClient(e));
+        } catch (ServerException e) {
+            log.error("Gemini server error for activity {}: {}", activity.getId(), e.getMessage());
+            result = aiService.failedRecommendation(activity, describeServer(e));
         } catch (Exception e) {
             log.error("Could not generate a report for activity {}", activity.getId(), e);
             result = aiService.failedRecommendation(activity, e.getMessage());
@@ -55,14 +58,22 @@ public class ActivityMessageListener {
         recommendationRepository.save(toSave);
     }
 
-    private String describe(WebClientResponseException e) {
-        int status = e.getStatusCode().value();
+    private String describeClient(ClientException e) {
+        int status = e.code();
         if (status == 400 || status == 401 || status == 403) {
             return "The Gemini API rejected the request. Check the API key and model name.";
         }
         if (status == 404) {
             return "The Gemini model in the configuration was not found.";
         }
+        if (status == 429) {
+            return "The Gemini API quota or rate limit was reached. Try again later.";
+        }
+        return "The Gemini API rejected the request (HTTP " + status + ").";
+    }
+
+    private String describeServer(ServerException e) {
+        int status = e.code();
         if (status == 429) {
             return "The Gemini API quota or rate limit was reached. Try again later.";
         }

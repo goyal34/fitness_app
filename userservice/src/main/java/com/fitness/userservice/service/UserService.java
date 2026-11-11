@@ -1,7 +1,7 @@
 package com.fitness.userservice.service;
 
 import org.springframework.security.oauth2.jwt.Jwt;
-import com.fitness.userservice.dto.UserResponse;
+import com.fitness.common.dto.UserResponse;
 import com.fitness.userservice.model.User;
 import com.fitness.userservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

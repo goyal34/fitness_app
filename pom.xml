@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>com.fitness</groupId>
+	<artifactId>fitness-app-microservices</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<packaging>pom</packaging>
+	<name>fitness-app-microservices</name>
+	<description>Aggregator for the fitness microservices and the shared module</description>
+
+	<!--
+		Each service keeps spring-boot-starter-parent as its own parent so it can
+		still be built and run on its own. This aggregator only makes it possible
+		to build everything, including fitness-common, with one Maven command:
+
+			mvn install
+
+		Run it once before starting the services (start-all.ps1 does this for you),
+		because the services resolve fitness-common from the local repository.
+	-->
+	<modules>
+		<module>fitness-common</module>
+		<module>configserver</module>
+		<module>eureka</module>
+		<module>userservice</module>
+		<module>activityservice</module>
+		<module>aiservice</module>
+		<module>gateway</module>
+	</modules>
+
+</project>

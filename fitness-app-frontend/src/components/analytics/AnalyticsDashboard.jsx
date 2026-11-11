@@ -2,9 +2,9 @@ import {
     Alert, Box, Button, Card, CardActionArea, CardContent, Grid2, Skeleton, Table, TableBody,
     TableCell, TableHead, TableRow, Typography
 } from '@mui/material';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { getAnalyticsDashboard } from '../../services/api';
+import { useGetAnalyticsDashboardQuery } from '../../services/fitnessApi';
 import { activityStyle } from '../../theme';
 import { ActivityHeatmap, BarList, ColumnChart, LineChart, SegmentedBar } from './charts';
 import { VIZ } from './vizTokens';
@@ -119,30 +119,18 @@ const LoadingState = () => (
 
 const AnalyticsDashboard = () => {
     const navigate = useNavigate();
-    const [data, setData] = useState(null);
-    const [error, setError] = useState(false);
+    // Cached and invalidated by the add/delete activity mutations, so the
+    // dashboard is already fresh when the user switches to this page.
+    const { data, isLoading, isError, refetch } = useGetAnalyticsDashboardQuery();
 
-    const load = useCallback(async () => {
-        setError(false);
-        try {
-            const response = await getAnalyticsDashboard();
-            setData(response.data);
-        } catch (e) {
-            console.error(e);
-            setError(true);
-        }
-    }, []);
-
-    useEffect(() => { load(); }, [load]);
-
-    if (error) {
+    if (isError) {
         return (
-            <Alert severity="error" action={<Button color="inherit" onClick={load}>Retry</Button>}>
+            <Alert severity="error" action={<Button color="inherit" onClick={refetch}>Retry</Button>}>
                 Could not load your analytics.
             </Alert>
         );
     }
-    if (!data) return <LoadingState />;
+    if (isLoading || !data) return <LoadingState />;
 
     const { totals, weeklyDuration, monthlyCalories, frequency, intensity, personalBests, streaks, monthComparison } = data;
 

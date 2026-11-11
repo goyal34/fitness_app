@@ -1,15 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { getActivity, getActivityDetail } from '../services/api';
 import {
     Box, Button, Card, CardContent, Chip, Grid2, Skeleton, Typography
 } from '@mui/material';
 import { activityStyle } from '../theme';
 import AiReport from './AiReport';
+import {
+    useGetActivityQuery,
+    useGetActivityRecommendationQuery,
+} from '../services/fitnessApi';
 
 // The recommendation is produced asynchronously via RabbitMQ, so it may not
-// exist for a few seconds after an activity is created. Poll briefly rather
-// than making the user refresh.
+// exist for a few seconds after an activity is created. RTK Query polls for it
+// rather than making the user refresh.
 const POLL_INTERVAL_MS = 4000;
 const POLL_ATTEMPTS = 15;
 
@@ -23,55 +26,40 @@ const Metric = ({ label, value }) => (
 const ActivityDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const [activity, setActivity] = useState(null);
-    const [recommendation, setRecommendation] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [waiting, setWaiting] = useState(true);
-    const timerRef = useRef(null);
 
+    const { data: activity, isLoading } = useGetActivityQuery(id);
+
+    const [polling, setPolling] = useState(true);
+    const [exhausted, setExhausted] = useState(false);
+    const attemptsRef = useRef(0);
+
+    const { data: recommendation, isError } = useGetActivityRecommendationQuery(id, {
+        pollingInterval: polling ? POLL_INTERVAL_MS : 0,
+    });
+
+    // A new activity gets a fresh poll budget.
     useEffect(() => {
-        let cancelled = false;
-        let attempts = 0;
-
-        const fetchActivity = async () => {
-            try {
-                const response = await getActivity(id);
-                if (!cancelled) setActivity(response.data);
-            } catch (error) {
-                console.error(error);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-
-        const pollRecommendation = async () => {
-            attempts += 1;
-            try {
-                const response = await getActivityDetail(id);
-                if (!cancelled) {
-                    setRecommendation(response.data);
-                    setWaiting(false);
-                }
-                return;
-            } catch {
-                // Not generated yet - keep polling until we run out of attempts.
-            }
-            if (!cancelled) {
-                if (attempts >= POLL_ATTEMPTS) setWaiting(false);
-                else timerRef.current = setTimeout(pollRecommendation, POLL_INTERVAL_MS);
-            }
-        };
-
-        fetchActivity();
-        pollRecommendation();
-
-        return () => {
-            cancelled = true;
-            if (timerRef.current) clearTimeout(timerRef.current);
-        };
+        attemptsRef.current = 0;
+        setExhausted(false);
+        setPolling(true);
     }, [id]);
 
-    if (loading) {
+    // Stop polling once a report (including a FAILED one) arrives, or after
+    // POLL_ATTEMPTS unsuccessful requests.
+    useEffect(() => {
+        if (recommendation) {
+            setPolling(false);
+            return;
+        }
+        if (!isError) return;
+        attemptsRef.current += 1;
+        if (attemptsRef.current >= POLL_ATTEMPTS) {
+            setExhausted(true);
+            setPolling(false);
+        }
+    }, [recommendation, isError]);
+
+    if (isLoading) {
         return (
             <Box sx={{ maxWidth: 860, mx: 'auto' }}>
                 <Skeleton variant="rounded" height={160} sx={{ mb: 2 }} />
@@ -128,7 +116,7 @@ const ActivityDetail = () => {
                 </CardContent>
             </Card>
 
-            <AiReport recommendation={recommendation} waiting={waiting} />
+            <AiReport recommendation={recommendation} waiting={!recommendation && !exhausted} />
         </Box>
     )
 }
