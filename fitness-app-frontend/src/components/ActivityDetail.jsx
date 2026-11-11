@@ -115,13 +115,13 @@ const ActivityDetail = () => {
                         <Metric label="Duration"
                                 value={activity.duration != null ? `${activity.duration} min` : '—'} />
                         <Metric label="Calories" value={activity.caloriesBurned ?? '—'} />
-                        <Metric label="Logged"
-                                value={activity.createdAt
-                                    ? new Date(activity.createdAt).toLocaleDateString()
+                        <Metric label="Date"
+                                value={(activity.startTime ?? activity.createdAt)
+                                    ? new Date(activity.startTime ?? activity.createdAt).toLocaleDateString()
                                     : '—'} />
                         <Metric label="Time"
-                                value={activity.createdAt
-                                    ? new Date(activity.createdAt).toLocaleTimeString([], {
+                                value={(activity.startTime ?? activity.createdAt)
+                                    ? new Date(activity.startTime ?? activity.createdAt).toLocaleTimeString([], {
                                         hour: 'numeric', minute: '2-digit' })
                                     : '—'} />
                     </Grid2>

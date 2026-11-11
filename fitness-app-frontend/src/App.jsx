@@ -5,11 +5,12 @@ import {
 import { useCallback, useContext, useEffect, useState } from "react";
 import { AuthContext } from "react-oauth2-code-pkce";
 import { useDispatch } from "react-redux";
-import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router";
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { logout, setCredentials } from "./store/authSlice";
 import ActivityForm from "./components/ActivityForm";
 import ActivityList from "./components/ActivityList";
 import ActivityDetail from "./components/ActivityDetail";
+import AnalyticsDashboard from "./components/analytics/AnalyticsDashboard";
 import { deleteActivity, getActivities } from "./services/api";
 import theme from "./theme";
 import { SignUpContext } from "./signUp";
@@ -55,6 +56,31 @@ const ActivitiesPage = ({ notify }) => {
     <Box>
       <ActivityForm onActivityAdded={handleAdded} onError={(m) => notify(m, 'error')} />
       <ActivityList activities={activities} loading={loading} onDelete={handleDelete} />
+    </Box>
+  );
+};
+
+const NAV = [
+  { path: '/activities', label: 'Activities' },
+  { path: '/analytics', label: 'Analytics' },
+];
+
+const NavLinks = () => {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  return (
+    <Box sx={{ display: 'flex', gap: 0.5, mr: 2 }}>
+      {NAV.map((item) => {
+        const active = pathname.startsWith(item.path);
+        return (
+          <Button key={item.path} onClick={() => navigate(item.path)}
+                  color={active ? 'primary' : 'inherit'}
+                  aria-current={active ? 'page' : undefined}
+                  sx={{ bgcolor: active ? 'rgba(91,33,182,0.08)' : 'transparent' }}>
+            {item.label}
+          </Button>
+        );
+      })}
     </Box>
   );
 };
@@ -113,9 +139,11 @@ function App() {
                     sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', bgcolor: 'background.paper' }}>
               <Toolbar>
                 <Typography component="span" sx={{ fontSize: 24, mr: 1 }}>🏋️</Typography>
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>Fitness Tracker</Typography>
+                <Typography variant="h6" sx={{ mr: 3, display: { xs: 'none', sm: 'block' } }}>Fitness Tracker</Typography>
+                <NavLinks />
+                <Box sx={{ flexGrow: 1 }} />
                 {tokenData?.given_name && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mr: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mr: 2, display: { xs: 'none', md: 'block' } }}>
                     {tokenData.given_name}
                   </Typography>
                 )}
@@ -127,6 +155,7 @@ function App() {
               <Routes>
                 <Route path="/activities" element={<ActivitiesPage notify={notify} />} />
                 <Route path="/activities/:id" element={<ActivityDetail />} />
+                <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/" element={<Navigate to="/activities" replace />} />
               </Routes>
             </Container>

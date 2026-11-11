@@ -9,6 +9,8 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.util.Optional;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -26,6 +28,15 @@ public class ActivityMessageListener {
     public void processActivity(Activity activity) {
         log.info("Received activity for processing: {}", activity.getId());
 
+        // The outbox delivers at least once, so the same activity can arrive twice.
+        // Don't pay for a second Gemini call if a report already exists.
+        Optional<Recommendation> existing =
+                recommendationRepository.findFirstByActivityIdOrderByCreatedAtDesc(activity.getId());
+        if (existing.isPresent() && Recommendation.STATUS_COMPLETED.equals(existing.get().getStatus())) {
+            log.info("Activity {} already has a report; ignoring duplicate message.", activity.getId());
+            return;
+        }
+
         Recommendation result;
         try {
             result = aiService.generateRecommendation(activity);
@@ -38,10 +49,9 @@ public class ActivityMessageListener {
             result = aiService.failedRecommendation(activity, e.getMessage());
         }
 
-        // One report per activity: replace any earlier one (e.g. a redelivered message).
+        // One report per activity: replace an earlier FAILED one instead of adding another.
         Recommendation toSave = result;
-        recommendationRepository.findFirstByActivityIdOrderByCreatedAtDesc(activity.getId())
-                .ifPresent(existing -> toSave.setId(existing.getId()));
+        existing.ifPresent(previous -> toSave.setId(previous.getId()));
         recommendationRepository.save(toSave);
     }
 

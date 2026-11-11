@@ -6,10 +6,18 @@ import React, { useState } from 'react'
 import { addActivity } from '../services/api'
 import { ACTIVITY_STYLES } from '../theme'
 
-const EMPTY = { type: 'RUNNING', duration: '', caloriesBurned: '' };
+// Local wall-clock time as "YYYY-MM-DDTHH:mm" (what <input type="datetime-local"> uses).
+// toISOString() would be UTC and put workouts on the wrong day in analytics.
+const localNow = () => {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+
+const empty = () => ({ type: 'RUNNING', duration: '', caloriesBurned: '', startTime: localNow() });
 
 const ActivityForm = ({ onActivityAdded, onError }) => {
-    const [activity, setActivity] = useState(EMPTY);
+    const [activity, setActivity] = useState(empty);
     const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
 
@@ -25,6 +33,9 @@ const ActivityForm = ({ onActivityAdded, onError }) => {
         if (activity.caloriesBurned === '') next.caloriesBurned = 'Calories burned is required';
         else if (!Number.isFinite(calories) || calories <= 0) next.caloriesBurned = 'Must be greater than 0';
 
+        if (!activity.startTime) next.startTime = 'Pick a date and time';
+        else if (activity.startTime > localNow()) next.startTime = 'Cannot be in the future';
+
         setErrors(next);
         return Object.keys(next).length === 0;
     };
@@ -39,10 +50,10 @@ const ActivityForm = ({ onActivityAdded, onError }) => {
                 type: activity.type,
                 duration: Number(activity.duration),
                 caloriesBurned: Number(activity.caloriesBurned),
-                startTime: new Date().toISOString().slice(0, 19),
+                startTime: `${activity.startTime}:00`,
                 additionalMetrics: {},
             });
-            setActivity(EMPTY);
+            setActivity(empty());
             setErrors({});
             onActivityAdded?.(response.data);
         } catch (error) {
@@ -59,7 +70,7 @@ const ActivityForm = ({ onActivityAdded, onError }) => {
                 <Typography variant="h6" gutterBottom>Log an activity</Typography>
                 <Box component="form" onSubmit={handleSubmit} noValidate>
                     <Grid2 container spacing={2} alignItems="flex-start">
-                        <Grid2 size={{ xs: 12, sm: 4 }}>
+                        <Grid2 size={{ xs: 12, sm: 6, md: 3 }}>
                             <TextField
                                 select fullWidth label="Activity Type"
                                 value={activity.type}
@@ -74,7 +85,18 @@ const ActivityForm = ({ onActivityAdded, onError }) => {
                             </TextField>
                         </Grid2>
 
-                        <Grid2 size={{ xs: 12, sm: 4 }}>
+                        <Grid2 size={{ xs: 12, sm: 6, md: 3 }}>
+                            <TextField
+                                fullWidth type="datetime-local" label="When"
+                                value={activity.startTime}
+                                error={Boolean(errors.startTime)}
+                                helperText={errors.startTime ?? ' '}
+                                slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: localNow() } }}
+                                onChange={(e) => setActivity({ ...activity, startTime: e.target.value })}
+                            />
+                        </Grid2>
+
+                        <Grid2 size={{ xs: 12, sm: 6, md: 3 }}>
                             <TextField
                                 fullWidth type="number" label="Duration (Minutes)"
                                 value={activity.duration}
@@ -84,7 +106,7 @@ const ActivityForm = ({ onActivityAdded, onError }) => {
                             />
                         </Grid2>
 
-                        <Grid2 size={{ xs: 12, sm: 4 }}>
+                        <Grid2 size={{ xs: 12, sm: 6, md: 3 }}>
                             <TextField
                                 fullWidth type="number" label="Calories Burned"
                                 value={activity.caloriesBurned}

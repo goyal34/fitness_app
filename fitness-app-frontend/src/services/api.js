@@ -23,3 +23,5 @@ export const addActivity = (activity) => api.post('/activities', activity);
 export const getActivity = (id) => api.get(`/activities/${id}`);
 export const deleteActivity = (id) => api.delete(`/activities/${id}`);
 export const getActivityDetail = (id) => api.get(`/recommendations/activity/${id}`);
+// Analytics: every figure is aggregated by the Activity Service (MongoDB pipelines).
+export const getAnalyticsDashboard = () => api.get('/activities/analytics/dashboard');

@@ -16,6 +16,12 @@ spring:
     port: 5672
     username: guest
     password: guest
+    # The outbox publisher waits for RabbitMQ to confirm each message, and
+    # treats a message that reaches no queue (returned) as a failure.
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
 
 server:
   port: 8082
@@ -34,3 +40,9 @@ rabbitmq:
     name: activity.queue
   routing:
     key: activity.tracking
+
+outbox:
+  publisher:
+    interval-ms: 2000   # how often to look for pending events
+    batch-size: 50      # max events sent per run
+    max-attempts: 10    # then the event is marked FAILED
