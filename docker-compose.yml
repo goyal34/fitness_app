@@ -30,12 +30,17 @@ services:
 
   mongodb:
     image: mongo:7
+    # Single-node replica set: MongoDB only supports multi-document
+    # transactions on a replica set, and the Activity Service saves each
+    # workout and its outbox event in one transaction.
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep -q 1"]
+      # Also initialises the replica set the first time it runs.
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }\" | grep -q 1"]
       interval: 5s
       timeout: 10s
       retries: 20

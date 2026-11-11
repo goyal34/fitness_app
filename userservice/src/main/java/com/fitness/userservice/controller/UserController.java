@@ -1,6 +1,6 @@
 package com.fitness.userservice.controller;
 
-import com.fitness.userservice.dto.UserResponse;
+import com.fitness.common.dto.UserResponse;
 import com.fitness.userservice.service.UserService;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -4,14 +4,17 @@ import com.fitness.activityservice.ActivityRepository;
 import com.fitness.activityservice.dto.ActivityRequest;
 import com.fitness.activityservice.dto.ActivityResponse;
 import com.fitness.activityservice.model.Activity;
+import com.fitness.common.event.ActivityEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Value;
+import com.fitness.activityservice.outbox.OutboxEvent;
+import com.fitness.activityservice.outbox.OutboxEventRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,13 +25,8 @@ public class ActivityService {
 
     private final ActivityRepository activityRepository;
     private final UserValidationService userValidationService;
-    private final RabbitTemplate rabbitTemplate;
-
-    @Value("${rabbitmq.exchange.name}")
-    private String exchange;
-
-    @Value("${rabbitmq.routing.key}")
-    private String routingKey;
+    private final OutboxEventRepository outboxEventRepository;
+    private final TransactionTemplate transactionTemplate;
 
     public ActivityResponse trackActivity(ActivityRequest request) {
 
@@ -37,25 +35,63 @@ public class ActivityService {
             throw new RuntimeException("Invalid User: " + request.getUserId());
         }
 
+        validate(request);
+
         Activity activity = Activity.builder()
                 .userId(request.getUserId())
                 .type(request.getType())
                 .duration(request.getDuration())
                 .caloriesBurned(request.getCaloriesBurned())
-                .startTime(request.getStartTime())
+                // Analytics group workouts by this date; default to "now" when not given.
+                .startTime(request.getStartTime() != null ? request.getStartTime() : LocalDateTime.now())
                 .additionalMetrics(request.getAdditionalMetrics())
                 .build();
 
-        Activity savedActivity = activityRepository.save(activity);
-
-        // Publish to RabbitMQ for AI Processing
-        try {
-            rabbitTemplate.convertAndSend(exchange, routingKey, savedActivity);
-        } catch(Exception e) {
-            log.error("Failed to publish activity to RabbitMQ : ", e);
-        }
+        // Transactional Outbox: the activity and the "activity created" event are
+        // saved in one MongoDB transaction, so there is never an activity without
+        // its event (or the reverse). OutboxPublisher sends the event to RabbitMQ.
+        Activity savedActivity = transactionTemplate.execute(status -> {
+            Activity saved = activityRepository.save(activity);
+            outboxEventRepository.save(OutboxEvent.activityCreated(toEvent(saved)));
+            return saved;
+        });
 
         return mapToResponse(savedActivity);
+    }
+
+    /** The outbox stores the shared wire contract, not the MongoDB document. */
+    private static ActivityEvent toEvent(Activity activity) {
+        return ActivityEvent.builder()
+                .id(activity.getId())
+                .userId(activity.getUserId())
+                .type(activity.getType() != null ? activity.getType().name() : null)
+                .duration(activity.getDuration())
+                .caloriesBurned(activity.getCaloriesBurned())
+                .startTime(activity.getStartTime())
+                .additionalMetrics(activity.getAdditionalMetrics())
+                .createdAt(activity.getCreatedAt())
+                .updatedAt(activity.getUpdatedAt())
+                .build();
+    }
+
+    private void validate(ActivityRequest request) {
+        if (request.getType() == null) {
+            throw badRequest("type is required");
+        }
+        if (request.getDuration() == null || request.getDuration() <= 0 || request.getDuration() > 1440) {
+            throw badRequest("duration must be between 1 and 1440 minutes");
+        }
+        if (request.getCaloriesBurned() == null || request.getCaloriesBurned() < 0 || request.getCaloriesBurned() > 20000) {
+            throw badRequest("caloriesBurned must be between 0 and 20000");
+        }
+        // A few minutes of slack for clock differences between browser and server.
+        if (request.getStartTime() != null && request.getStartTime().isAfter(LocalDateTime.now().plusMinutes(5))) {
+            throw badRequest("startTime cannot be in the future");
+        }
+    }
+
+    private static ResponseStatusException badRequest(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
     private ActivityResponse mapToResponse(Activity activity){

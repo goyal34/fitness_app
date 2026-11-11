@@ -28,9 +28,17 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<!-- 1.21.4+ works with Docker Engine 29 (Boot 3.4 defaults to 1.20.x) -->
+		<testcontainers.version>1.21.4</testcontainers.version>
 		<spring-cloud.version>2024.0.0</spring-cloud.version>
+		<fitness-common.version>0.0.1-SNAPSHOT</fitness-common.version>
 	</properties>
 	<dependencies>
+		<dependency>
+			<groupId>com.fitness</groupId>
+			<artifactId>fitness-common</artifactId>
+			<version>${fitness-common.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
@@ -67,6 +75,27 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Integration tests against real MongoDB (replica set) and RabbitMQ in Docker -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>mongodb</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>rabbitmq</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

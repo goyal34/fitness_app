@@ -5,48 +5,41 @@ import {
 import { useCallback, useContext, useEffect, useState } from "react";
 import { AuthContext } from "react-oauth2-code-pkce";
 import { useDispatch } from "react-redux";
-import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router";
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { logout, setCredentials } from "./store/authSlice";
 import ActivityForm from "./components/ActivityForm";
 import ActivityList from "./components/ActivityList";
 import ActivityDetail from "./components/ActivityDetail";
-import { deleteActivity, getActivities } from "./services/api";
+import AnalyticsDashboard from "./components/analytics/AnalyticsDashboard";
+import {
+  fitnessApi,
+  useDeleteActivityMutation,
+  useGetActivitiesQuery,
+} from "./services/fitnessApi";
 import theme from "./theme";
 import { SignUpContext } from "./signUp";
 
 const ActivitiesPage = ({ notify }) => {
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Cached by RTK Query: revisiting the page reuses the list, and mutations
+  // invalidate it so it refetches in the background.
+  const { data: activities = [], isLoading, isError } = useGetActivitiesQuery();
+  const [deleteActivity] = useDeleteActivityMutation();
 
-  const fetchActivities = useCallback(async () => {
-    try {
-      const response = await getActivities();
-      setActivities(response.data ?? []);
-    } catch (error) {
-      console.error(error);
-      notify('Could not load your activities.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [notify]);
+  useEffect(() => {
+    if (isError) notify('Could not load your activities.', 'error');
+  }, [isError, notify]);
 
-  useEffect(() => { fetchActivities(); }, [fetchActivities]);
-
-  // Prepend the newly created activity instead of reloading the page.
-  const handleAdded = (activity) => {
-    setActivities((prev) => [activity, ...prev]);
+  const handleAdded = () => {
     notify('Activity added. Your AI report is being generated.', 'success');
   };
 
   const handleDelete = async (activity) => {
-    const previous = activities;
-    setActivities((prev) => prev.filter((a) => a.id !== activity.id));
     try {
-      await deleteActivity(activity.id);
+      // The cache is updated optimistically and rolled back on failure.
+      await deleteActivity(activity.id).unwrap();
       notify('Activity deleted.', 'success');
     } catch (error) {
       console.error(error);
-      setActivities(previous);   // roll back the optimistic removal
       notify('Could not delete the activity.', 'error');
     }
   };
@@ -54,7 +47,32 @@ const ActivitiesPage = ({ notify }) => {
   return (
     <Box>
       <ActivityForm onActivityAdded={handleAdded} onError={(m) => notify(m, 'error')} />
-      <ActivityList activities={activities} loading={loading} onDelete={handleDelete} />
+      <ActivityList activities={activities} loading={isLoading} onDelete={handleDelete} />
+    </Box>
+  );
+};
+
+const NAV = [
+  { path: '/activities', label: 'Activities' },
+  { path: '/analytics', label: 'Analytics' },
+];
+
+const NavLinks = () => {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  return (
+    <Box sx={{ display: 'flex', gap: 0.5, mr: 2 }}>
+      {NAV.map((item) => {
+        const active = pathname.startsWith(item.path);
+        return (
+          <Button key={item.path} onClick={() => navigate(item.path)}
+                  color={active ? 'primary' : 'inherit'}
+                  aria-current={active ? 'page' : undefined}
+                  sx={{ bgcolor: active ? 'rgba(91,33,182,0.08)' : 'transparent' }}>
+            {item.label}
+          </Button>
+        );
+      })}
     </Box>
   );
 };
@@ -69,9 +87,11 @@ function App() {
     setToast({ open: true, message, severity });
   }, []);
 
-  // Clear the saved login as well as the Keycloak session.
+  // Clear the saved login as well as the Keycloak session, and drop any
+  // cached API data so the next user never sees the previous user's records.
   const handleLogout = () => {
     dispatch(logout());
+    dispatch(fitnessApi.util.resetApiState());
     logOut();
   };
 
@@ -113,9 +133,11 @@ function App() {
                     sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', bgcolor: 'background.paper' }}>
               <Toolbar>
                 <Typography component="span" sx={{ fontSize: 24, mr: 1 }}>🏋️</Typography>
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>Fitness Tracker</Typography>
+                <Typography variant="h6" sx={{ mr: 3, display: { xs: 'none', sm: 'block' } }}>Fitness Tracker</Typography>
+                <NavLinks />
+                <Box sx={{ flexGrow: 1 }} />
                 {tokenData?.given_name && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mr: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mr: 2, display: { xs: 'none', md: 'block' } }}>
                     {tokenData.given_name}
                   </Typography>
                 )}
@@ -127,6 +149,7 @@ function App() {
               <Routes>
                 <Route path="/activities" element={<ActivitiesPage notify={notify} />} />
                 <Route path="/activities/:id" element={<ActivityDetail />} />
+                <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/" element={<Navigate to="/activities" replace />} />
               </Routes>
             </Container>

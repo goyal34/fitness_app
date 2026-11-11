@@ -47,8 +47,8 @@ const ActivityList = ({ activities, loading, onDelete }) => {
         const sorted = [...list].sort((a, b) => {
             if (sort === 'CALORIES') return (b.caloriesBurned ?? 0) - (a.caloriesBurned ?? 0);
             if (sort === 'DURATION') return (b.duration ?? 0) - (a.duration ?? 0);
-            const at = new Date(a.createdAt ?? 0).getTime();
-            const bt = new Date(b.createdAt ?? 0).getTime();
+            const at = new Date(a.startTime ?? a.createdAt ?? 0).getTime();
+            const bt = new Date(b.startTime ?? b.createdAt ?? 0).getTime();
             return sort === 'OLDEST' ? at - bt : bt - at;
         });
         return sorted;
@@ -167,7 +167,7 @@ const ActivityList = ({ activities, loading, onDelete }) => {
                                             </Typography>
 
                                             <Typography variant="caption" color="text.secondary">
-                                                {formatDate(activity.createdAt)}
+                                                {formatDate(activity.startTime ?? activity.createdAt)}
                                             </Typography>
                                         </CardContent>
                                     </CardActionArea>
@@ -201,7 +201,7 @@ const ActivityList = ({ activities, loading, onDelete }) => {
                                 {activityStyle(pendingDelete.type).label}
                                 {pendingDelete.duration != null && ` · ${pendingDelete.duration} min`}
                                 {pendingDelete.caloriesBurned != null && ` · ${pendingDelete.caloriesBurned} cal`}
-                                {pendingDelete.createdAt && ` · ${formatDate(pendingDelete.createdAt)}`}
+                                {(pendingDelete.startTime ?? pendingDelete.createdAt) && ` · ${formatDate(pendingDelete.startTime ?? pendingDelete.createdAt)}`}
                             </>
                         )}
                     </DialogContentText>

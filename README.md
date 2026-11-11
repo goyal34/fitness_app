@@ -117,7 +117,7 @@ The application allows authenticated users to track fitness activities and recei
 * Vite
 * Material UI
 * Redux Toolkit
-* Axios
+* RTK Query
 * OAuth2 PKCE
 
 ---
@@ -126,6 +126,12 @@ The application allows authenticated users to track fitness activities and recei
 
 ```text
 fitness-app-microservices/
+│
+├── pom.xml                     # aggregator: builds every module with one command
+│
+├── fitness-common/             # shared Spring config + DTO/event contracts
+│   ├── src/main/java/com/fitness/common/
+│   └── pom.xml
 │
 ├── activityservice/
 │   ├── src/
@@ -157,6 +163,35 @@ fitness-app-microservices/
     ├── package.json
     └── vite.config.js
 ```
+
+### Shared module (`fitness-common`)
+
+Code that used to be copy-pasted across services lives here instead of in a
+third-party library:
+
+| Shared item | Package | Used by |
+| --- | --- | --- |
+| Resource-server `SecurityFilterChain` | `com.fitness.common.config` | User, Activity, AI |
+| RabbitMQ queue/exchange/binding + JSON converter | `com.fitness.common.config` | Activity, AI |
+| `UserResponse` | `com.fitness.common.dto` | User Service, Gateway |
+| `ActivityEvent` (RabbitMQ message) | `com.fitness.common.event` | Activity Service, AI Service |
+
+The configuration classes are registered as Spring Boot auto-configurations
+(`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`),
+so a service gets them just by depending on the module. They apply only when
+the matching starter and properties are present, and a service can still
+override any bean.
+
+Because the services resolve `fitness-common` from the local Maven repository,
+install it before running a service on its own:
+
+```bash
+mvn install -DskipTests          # from the repository root: builds all modules
+# or only the shared module:
+mvn -f fitness-common/pom.xml install -DskipTests
+```
+
+`start-all.ps1` does this automatically.
 
 ---
 
@@ -440,7 +475,16 @@ Values already exported in your shell take precedence. The launcher flags are:
 The manual steps below remain available if you prefer to start each service
 yourself or run them from your IDE.
 
-Start the services in the following order:
+Start the services in the following order.
+
+> First install the shared module once, otherwise Maven cannot resolve
+> `com.fitness:fitness-common` when building the services:
+>
+> ```bash
+> mvn -f fitness-common/pom.xml install -DskipTests
+> ```
+>
+> (or `mvn install -DskipTests` from the repository root to build everything).
 
 ### 1. Config Server
 
@@ -628,6 +672,31 @@ DELETE /api/activities/{activityId}
 
 ---
 
+### Workout Analytics
+
+Computed by MongoDB aggregation pipelines in the Activity Service
+(`$group`, `$dateTrunc`, `$facet`), always for the logged-in user. Weeks start
+on Monday; days follow the server's time zone (the one workout times are stored in).
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/activities/analytics/dashboard` | Everything below in one response (used by the Analytics page) |
+| `GET /api/activities/analytics/weekly-duration?weeks=12` | Minutes, workouts and calories per week (empty weeks included) |
+| `GET /api/activities/analytics/monthly-calories?months=12` | Calories, workouts and minutes per month |
+| `GET /api/activities/analytics/frequency?days=90` | Workouts per type (with share) and per weekday, workouts per week |
+| `GET /api/activities/analytics/intensity?weeks=12` | Average kcal/min (weighted by duration) per week and overall, workouts per intensity level |
+| `GET /api/activities/analytics/personal-bests` | Longest workout, most calories, highest intensity, best week and month, bests per type |
+| `GET /api/activities/analytics/streaks` | Current and longest daily streak, weekly streak, active days, last 12 weeks by day |
+| `GET /api/activities/analytics/month-comparison?month=2026-11` | A month vs the month before; the current month is compared month-to-date (1st to today vs the same days last month) |
+
+Intensity levels (kcal/min): Low < 5, Moderate 5–8, High 8–11, Very high 11+.
+
+Tests: the analytics are checked against a real MongoDB
+with `AnalyticsIntegrationTest` (each figure compared with the same value
+computed in plain Java) and `StreakCalculatorTest`.
+
+---
+
 ## AI Recommendation Service
 
 ### Get My Recommendations
@@ -648,41 +717,57 @@ GET /api/recommendations/activity/{activityId}
 
 # 🤖 AI Recommendation Flow
 
-The AI recommendation pipeline works asynchronously:
+The AI recommendation pipeline works asynchronously and uses the
+**Transactional Outbox pattern**, so a saved workout always reaches the AI
+Service, even if RabbitMQ is down at the time:
 
 ```text
 User creates activity
         │
         ▼
-Activity Service
-        │
-        ├── Save activity → MongoDB
-        │
-        ▼
-RabbitMQ
+Activity Service ── one MongoDB transaction ──┐
+        │                                     │
+        ├── save activity      → activities    │
+        └── save pending event → outbox_events ┘
         │
         ▼
-AI Service
+Outbox Publisher (every 2 s)
+        │   claims pending events, sends them, waits for RabbitMQ's
+        │   publisher confirm, then marks them PUBLISHED
+        │   (failures: retry with exponential backoff, FAILED after 10 tries)
+        ▼
+RabbitMQ  (activity.queue)
         │
         ▼
-Google Gemini API
+AI Service ── skips activities that already have a report (at-least-once delivery)
         │
         ▼
-AI Analysis
-        │
-        ├── Performance analysis
-        ├── Improvements
-        ├── Workout suggestions
-        └── Safety guidelines
+Google Gemini API (structured JSON output)
         │
         ▼
-MongoDB
+Report: score, intensity, analysis, strengths, prioritised improvements,
+        next workouts, safety and recovery tips
         │
         ▼
-Frontend
+MongoDB → Frontend
 ```
 
-The AI service structures Gemini's response into recommendation data containing analysis, improvements, suggestions, and safety guidelines.
+Why: saving to MongoDB and publishing to RabbitMQ are two separate systems.
+Publishing directly after saving could lose the event (RabbitMQ down) or send
+an event for an activity that was never saved. Writing both to MongoDB in one
+transaction removes that gap.
+
+MongoDB transactions need a replica set, so `docker-compose.yml` runs MongoDB
+as a single-node replica set (`rs0`), and `start-all.ps1` initialises it.
+Published events are deleted automatically after 7 days.
+
+The outbox is covered by an integration test that runs real MongoDB and
+RabbitMQ in Docker (Testcontainers):
+
+```bash
+cd activityservice
+./mvnw test -Dtest=OutboxIntegrationTest
+```
 
 ---
 

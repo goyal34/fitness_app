@@ -174,6 +174,7 @@ function Show-LogTail {
 
 function Show-ContainerLogs {
     param([string]$Service)
+    $ErrorActionPreference = 'Continue'   # container logs arrive on stderr
 
     try {
         $lines = & docker compose logs --tail 40 $Service 2>&1
@@ -343,6 +344,45 @@ function Wait-ForInfrastructure {
     Wait-ForEndpoint -Name 'MongoDB'    -Port 27017 -Url '' -TimeoutSeconds 90
     Wait-ForEndpoint -Name 'RabbitMQ'   -Port 5672  -Url '' -TimeoutSeconds 90
     Wait-ForEndpoint -Name 'Keycloak'   -Port 8181  -Url 'http://localhost:8181/realms/master' -TimeoutSeconds 600
+}
+
+# The Activity Service saves a workout and its outbox event in one MongoDB
+# transaction, which needs a replica set. Makes sure the compose MongoDB runs
+# as one ("rs0") and has a writable primary before the services start.
+function Initialize-MongoReplicaSet {
+    # docker compose writes normal progress ("Container ... Running") to stderr.
+    # With 'Stop', Windows PowerShell turns redirected stderr into a fatal error,
+    # so this function checks exit codes instead.
+    $ErrorActionPreference = 'Continue'
+
+    $containerId = & docker compose ps -q mongodb 2>$null
+    if (-not $containerId) {
+        Write-Warn "MongoDB is not the docker compose container. Make sure it runs as a replica set, or saving activities will fail."
+        return
+    }
+
+    Write-Step "Preparing MongoDB replica set"
+    # Recreates the container if it was started before --replSet was added.
+    & docker compose up -d mongodb *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not start MongoDB with docker compose."
+    }
+
+    $js = "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}) }; " +
+          "for (let i = 0; i < 40 && !db.hello().isWritablePrimary; i++) { sleep(500) }; " +
+          "print(db.hello().isWritablePrimary ? 'RS_READY' : 'RS_WAITING')"
+
+    $deadline = (Get-Date).AddSeconds(90)
+    while ((Get-Date) -lt $deadline) {
+        $out = (& docker compose exec -T mongodb mongosh --quiet --eval $js 2>&1) -join "`n"
+        if ($out -match 'RS_READY') {
+            Write-Ok "MongoDB replica set 'rs0' is ready."
+            return
+        }
+        Start-Sleep -Seconds 2
+    }
+    Show-ContainerLogs -Service 'mongodb'
+    throw "MongoDB did not become a writable replica set primary. Last output: $out"
 }
 
 # ---------------------------------------------------------------------------
@@ -613,6 +653,14 @@ try {
         throw "Maven (mvn) was not found. Install Maven 3.9+ or add it to PATH."
     }
 
+    # The services depend on fitness-common from the local repository, so it
+    # must be installed before Maven starts them.
+    Write-Step "Building the shared module (fitness-common)"
+    & mvn -q -f (Join-Path $Root 'fitness-common\pom.xml') install -DskipTests
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not build fitness-common. See the Maven output above."
+    }
+
     if (-not $SkipInfra) {
         Start-Infrastructure
     }
@@ -621,6 +669,9 @@ try {
     }
 
     Wait-ForInfrastructure
+    if (-not $SkipInfra) {
+        Initialize-MongoReplicaSet
+    }
     Initialize-Keycloak
 
     Write-Step "Starting backend services (this can take a few minutes on first run)"
