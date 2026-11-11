@@ -8,9 +8,8 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * The structured workout report produced by Gemini. Its shape matches the
- * response schema sent in {@link com.fitness.aiservice.service.GeminiService},
- * so Gemini's JSON maps straight onto it.
+ * The structured workout report produced by Gemini via Spring AI
+ * {@code ChatClient.entity(AiReport.class)}.
  */
 @Data
 @NoArgsConstructor

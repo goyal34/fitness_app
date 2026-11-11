@@ -1,5 +1,3 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-
 // Chart tokens (validated: categorical pair + ordinal blue ramp, light surface).
 export const VIZ = {
     blue: '#2a78d6',
@@ -13,19 +11,5 @@ export const VIZ = {
     axis: '#c3c2b7',
     good: '#006300',
     critical: '#d03b3b',
-};
-
-/** Width of a container, kept up to date. */
-export const useWidth = () => {
-    const ref = useRef(null);
-    const [width, setWidth] = useState(0);
-    useLayoutEffect(() => {
-        if (!ref.current) return undefined;
-        const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
-        observer.observe(ref.current);
-        setWidth(ref.current.getBoundingClientRect().width);
-        return () => observer.disconnect();
-    }, []);
-    return [ref, width];
 };
 

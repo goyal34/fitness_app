@@ -17,6 +17,11 @@ spring:
     port: 5672
     username: guest
     password: guest
+  ai:
+    # Disable Spring AI chat auto-config: it refuses empty API keys. GeminiAiConfig
+    # creates ChatClient only when gemini.api.key is set.
+    model:
+      chat: none
 
 
 eureka:
@@ -38,5 +43,6 @@ rabbitmq:
 
 gemini:
   api:
-    url: ${GEMINI_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=}
     key: ${GEMINI_API_KEY:}
+    # Override with GEMINI_MODEL when Google retires a model name.
+    model: ${GEMINI_MODEL:gemini-2.5-flash}

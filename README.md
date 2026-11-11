@@ -129,6 +129,11 @@ fitness-app-microservices/
 │
 ├── pom.xml                     # aggregator: builds every module with one command
 │
+├── requirements.txt            # prerequisites, ports, env vars, Keycloak setup
+│
+├── start-all.ps1               # starts infrastructure and every service
+├── stop-all.ps1                # stops everything again
+│
 ├── fitness-common/             # shared Spring config + DTO/event contracts
 │   ├── src/main/java/com/fitness/common/
 │   └── pom.xml
@@ -197,222 +202,28 @@ mvn -f fitness-common/pom.xml install -DskipTests
 
 # ⚙️ Setup & Installation
 
-## 1. Prerequisites
+Everything the application needs to run — tool versions, ports,
+infrastructure services, environment variables, the Gemini key and the
+Keycloak realm — is listed in [`requirements.txt`](requirements.txt). Install
+and configure those first.
 
-Install the following:
+## Quick checklist
 
-* Java 17+
-* Maven 3.9+
-* Node.js
-* npm
-* Docker Desktop (recommended) **or** local installations of PostgreSQL, MongoDB, RabbitMQ and Keycloak
-* Google Gemini API key
+* Java 17+, Maven 3.9+, Node.js 18+ and npm
+* Docker Desktop (recommended) **or** local PostgreSQL, MongoDB, RabbitMQ and Keycloak
+* `POSTGRES_PASSWORD` set for the User Service (no default)
+* `GEMINI_URL` and `GEMINI_API_KEY` set for the AI Service
+* Keycloak realm `fitness-oauth2` with the `oauth2-pkce-client` client
 
 ---
 
-## 2. Clone the Repository
+## 1. Clone the Repository
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/fitness_app.git
 
 cd fitness_app
 ```
-
----
-
-## 3. Start PostgreSQL
-
-Create the database used by the User Service:
-
-```sql
-CREATE DATABASE fitness_user_db;
-```
-
-The User Service reads its credentials from the environment rather than from committed
-configuration, so set the password before starting it:
-
-```text
-POSTGRES_PASSWORD=your_postgres_password
-POSTGRES_USER=postgres              # optional, defaults to postgres
-```
-
-`user-service.yml` refers to them as placeholders:
-
-```yaml
-spring:
-  datasource:
-    username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD}
-```
-
-The Config Server passes these through unresolved, so `POSTGRES_PASSWORD` must be set in the
-**User Service** process environment, not the Config Server's. On Windows, set it once for your
-user account:
-
-```powershell
-[Environment]::SetEnvironmentVariable("POSTGRES_PASSWORD", "your_postgres_password", "User")
-```
-
-`POSTGRES_PASSWORD` has no default. If it is not set, the User Service fails at startup with
-`Could not resolve placeholder 'POSTGRES_PASSWORD'`.
-
----
-
-## 4. Start MongoDB
-
-MongoDB is used by:
-
-* Activity Service
-* AI Service
-
-The application expects MongoDB on:
-
-```text
-mongodb://localhost:27017
-```
-
-The databases used are:
-
-```text
-fitnessactivity
-fitnessrecommendation
-```
-
----
-
-## 5. Start RabbitMQ
-
-RabbitMQ is used for asynchronous communication between the Activity and AI services.
-
-Default configuration:
-
-```text
-Host: localhost
-Port: 5672
-Username: guest
-Password: guest
-```
-
-The application uses:
-
-```text
-Exchange: fitness.exchange
-Queue: activity.queue
-Routing Key: activity.tracking
-```
-
-When an activity is created, Activity Service publishes the activity to RabbitMQ. AI Service consumes the message and generates the recommendation.
-
----
-
-## 6. Configure Gemini API
-
-Create a Gemini API key using Google AI Studio.
-
-Set these environment variables:
-
-```text
-GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=
-GEMINI_API_KEY=YOUR_API_KEY
-```
-
-`GeminiService` builds the request URI by concatenating the two values directly:
-
-```java
-.uri(geminiApiUrl + geminiApiKey)
-```
-
-so `GEMINI_URL` must be the full model endpoint and must end with the trailing `?key=`.
-
-**Google retires older models periodically.** If the AI Service logs a `404` like
-`This model models/... is no longer available`, the response names the current replacement — put
-that model into `GEMINI_URL`. You can check a key and model in one call before starting the
-service:
-
-```powershell
-$k = "YOUR_API_KEY"
-$u = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$k"
-Invoke-RestMethod -Method Post -Uri $u -ContentType "application/json" `
-  -Body '{"contents":[{"parts":[{"text":"Say hello"}]}]}'
-```
-
-A `candidates` array means the key and model are both good. A `400` with `API_KEY_INVALID` means
-the key is wrong; a `404` means the model name needs updating.
-
-**Never commit your actual API key to GitHub.**
-
-The AI Service reads these values through:
-
-```yaml
-gemini:
-  api:
-    url: ${GEMINI_URL}
-    key: ${GEMINI_API_KEY}
-```
-
----
-
-## 7. Configure Keycloak
-
-The application uses Keycloak for OAuth2 authentication.
-
-The current configuration expects Keycloak at:
-
-```text
-http://localhost:8181
-```
-
-Realm:
-
-```text
-fitness-oauth2
-```
-
-The frontend uses OAuth2 PKCE with:
-
-```text
-Client ID: oauth2-pkce-client
-```
-
-Make sure the Keycloak realm, client, redirect URI, and user configuration match the application's authentication settings.
-
-### Bootstrapping the realm
-
-If you are starting from an empty Keycloak, run it and create the realm, the PKCE client and a
-test user. These values must match `fitness-app-frontend/src/authConfig.js` and the
-`jwk-set-uri` in `api-gateway.yml`:
-
-```powershell
-docker run -d --name fitness-keycloak -p 8181:8080 `
-  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin `
-  quay.io/keycloak/keycloak:26.0 start-dev
-```
-
-Wait ~30 seconds for Keycloak to boot, then:
-
-```powershell
-$KC = "http://localhost:8181"
-$tok = (Invoke-RestMethod -Method Post -Uri "$KC/realms/master/protocol/openid-connect/token" `
-  -Body @{client_id='admin-cli';username='admin';password='admin';grant_type='password'}).access_token
-$H = @{ Authorization = "Bearer $tok"; 'Content-Type' = 'application/json' }
-
-Invoke-RestMethod -Method Post -Uri "$KC/admin/realms" -Headers $H `
-  -Body '{"realm":"fitness-oauth2","enabled":true}'
-
-Invoke-RestMethod -Method Post -Uri "$KC/admin/realms/fitness-oauth2/clients" -Headers $H -Body @'
-{"clientId":"oauth2-pkce-client","enabled":true,"publicClient":true,"standardFlowEnabled":true,
- "directAccessGrantsEnabled":true,"redirectUris":["http://localhost:5173/*","http://localhost:5173"],
- "webOrigins":["http://localhost:5173","+"],"attributes":{"pkce.code.challenge.method":"S256"}}
-'@
-
-Invoke-RestMethod -Method Post -Uri "$KC/admin/realms/fitness-oauth2/users" -Headers $H -Body @'
-{"username":"testuser","email":"testuser@fitness.local","emailVerified":true,"firstName":"Test",
- "lastName":"User","enabled":true,"credentials":[{"type":"password","value":"test1234","temporary":false}]}
-'@
-```
-
-The gateway's `KeycloakUserSyncFilter` reads the `sub`, `email`, `given_name` and `family_name`
-claims to auto-register users, so the test user needs an email, first name and last name set.
 
 ---
 
