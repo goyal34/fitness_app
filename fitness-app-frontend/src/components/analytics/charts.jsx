@@ -1,41 +1,41 @@
 import { Box, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { useWidth, VIZ } from './vizTokens';
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Line,
+    LineChart as RechartsLineChart,
+    ReferenceLine,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from 'recharts';
+import { VIZ } from './vizTokens';
 
-const TICK_FONT = { fontSize: 11, fill: VIZ.muted, fontVariantNumeric: 'tabular-nums' };
-
-/** A round upper bound and evenly spaced ticks for a value axis. */
-const niceScale = (max, count = 4, integer = false) => {
-    if (!max || max <= 0) return { max: 1, ticks: [0, 1] };
-    const rough = max / count;
-    const power = 10 ** Math.floor(Math.log10(rough));
-    // Counts get whole-number steps only (no 2.5 workouts).
-    const multipliers = integer ? [1, 2, 5, 10] : [1, 2, 2.5, 5, 10];
-    const step = Math.max(integer ? 1 : 0, multipliers.map((m) => m * power).find((s) => s >= rough));
-    const top = Math.ceil(max / step) * step;
-    const ticks = [];
-    for (let v = 0; v <= top + step / 2; v += step) ticks.push(Math.round(v * 100) / 100);
-    return { max: top, ticks };
-};
+const TICK = { fontSize: 11, fill: VIZ.muted };
 
 const compact = (v) => (v >= 10000 ? `${Math.round(v / 1000)}k` : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`);
 
-/** Column with 4px rounded data-end, square at the baseline. */
-const columnPath = (x, y, w, h) => {
-    const r = Math.min(4, w / 2, h);
-    return `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`;
+const tipBoxSx = {
+    bgcolor: '#ffffff',
+    border: '1px solid rgba(11,11,11,0.10)',
+    borderRadius: 1.5,
+    boxShadow: '0 4px 14px rgba(16,24,40,0.12)',
+    px: 1.25,
+    py: 0.75,
+    whiteSpace: 'nowrap',
 };
 
-/** Floating tooltip, positioned in the chart's own box. */
+/** Floating tooltip, positioned in the chart's own box (used by non-Recharts widgets). */
 export const Tip = ({ x, y, children, width }) => {
     if (x == null) return null;
     const left = Math.max(4, Math.min(x, (width ?? 9999) - 4));
     return (
         <Box sx={{
             position: 'absolute', left, top: y, transform: 'translate(-50%, calc(-100% - 10px))',
-            bgcolor: '#ffffff', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 1.5,
-            boxShadow: '0 4px 14px rgba(16,24,40,0.12)', px: 1.25, py: 0.75,
-            pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 2,
+            ...tipBoxSx, pointerEvents: 'none', zIndex: 2,
         }}>
             {children}
         </Box>
@@ -56,142 +56,101 @@ const TipTitle = ({ children }) => (
     <Typography sx={{ fontSize: 12, fontWeight: 700, color: VIZ.ink, mb: 0.25 }}>{children}</Typography>
 );
 
+const ChartTooltip = ({ active, payload, valueLabel, unit, color, emptyLabel }) => {
+    if (!active || !payload?.[0]) return null;
+    const d = payload[0].payload;
+    const raw = d.value;
+    const display = raw != null
+        ? `${typeof raw === 'number' ? raw.toLocaleString() : raw}${unit}`
+        : (emptyLabel ?? 'No data');
+    return (
+        <Box sx={tipBoxSx}>
+            <TipTitle>{d.tooltipTitle ?? d.label}</TipTitle>
+            <TipLine label={valueLabel} value={display} color={color} />
+            {d.extra?.map((e) => <TipLine key={e.label} label={e.label} value={e.value} />)}
+        </Box>
+    );
+};
+
 /**
  * Vertical bar chart, one series.
  * data: [{ key, label, tooltipTitle, value }]
  */
-export const ColumnChart = ({ data, color = VIZ.blue, height = 220, unit = '', valueLabel = 'Value', integer = false }) => {
-    const [ref, width] = useWidth();
-    const [hover, setHover] = useState(null);
-    const m = { top: 12, right: 8, bottom: 26, left: 40 };
-    const innerW = Math.max(0, width - m.left - m.right);
-    const innerH = height - m.top - m.bottom;
-    const { max, ticks } = niceScale(Math.max(...data.map((d) => d.value), 0), 4, integer);
-    const band = data.length ? innerW / data.length : 0;
-    const barW = Math.min(24, band * 0.62);
-    const labelEvery = Math.max(1, Math.ceil(44 / Math.max(band, 1)));
-    const y = (v) => innerH - (v / max) * innerH;
-
-    const h = hover != null ? data[hover] : null;
-    return (
-        <Box ref={ref} sx={{ position: 'relative', width: '100%' }} onMouseLeave={() => setHover(null)}>
-            {width > 0 && (
-                <svg width={width} height={height} role="img"
-                     aria-label={`${valueLabel} bar chart with ${data.length} bars`}>
-                    <g transform={`translate(${m.left},${m.top})`}>
-                        {ticks.map((t) => (
-                            <g key={t}>
-                                <line x1={0} x2={innerW} y1={y(t)} y2={y(t)}
-                                      stroke={t === 0 ? VIZ.axis : VIZ.grid} strokeWidth={1} />
-                                <text x={-8} y={y(t)} dy="0.32em" textAnchor="end" style={TICK_FONT}>{compact(t)}</text>
-                            </g>
-                        ))}
-                        {data.map((d, i) => {
-                            const x = i * band + (band - barW) / 2;
-                            const barH = innerH - y(d.value);
-                            return (
-                                <g key={d.key}>
-                                    {hover === i && <rect x={i * band} y={0} width={band} height={innerH} fill="rgba(11,11,11,0.04)" />}
-                                    {d.value > 0 && <path d={columnPath(x, y(d.value), barW, barH)} fill={color} />}
-                                    {i % labelEvery === (data.length - 1) % labelEvery && (
-                                        <text x={i * band + band / 2} y={innerH + 17} textAnchor="middle" style={TICK_FONT}>
-                                            {d.label}
-                                        </text>
-                                    )}
-                                    {/* Hit target: the whole band, taller than the bar. */}
-                                    <rect x={i * band} y={0} width={band} height={innerH} fill="transparent"
-                                          onMouseEnter={() => setHover(i)} />
-                                </g>
-                            );
-                        })}
-                    </g>
-                </svg>
-            )}
-            {h && (
-                <Tip x={m.left + hover * band + band / 2} y={m.top + y(h.value)} width={width}>
-                    <TipTitle>{h.tooltipTitle ?? h.label}</TipTitle>
-                    <TipLine label={valueLabel} value={`${h.value.toLocaleString()}${unit}`} color={color} />
-                    {h.extra?.map((e) => <TipLine key={e.label} label={e.label} value={e.value} />)}
-                </Tip>
-            )}
-        </Box>
-    );
-};
+export const ColumnChart = ({ data, color = VIZ.blue, height = 220, unit = '', valueLabel = 'Value', integer = false }) => (
+    <Box sx={{ width: '100%', height }} role="img" aria-label={`${valueLabel} bar chart with ${data.length} bars`}>
+        <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 12, right: 8, bottom: 4, left: 4 }}>
+                <CartesianGrid vertical={false} stroke={VIZ.grid} strokeDasharray="0" />
+                <XAxis
+                    dataKey="label"
+                    tick={TICK}
+                    tickLine={false}
+                    axisLine={{ stroke: VIZ.axis }}
+                    interval="preserveStartEnd"
+                    minTickGap={28}
+                />
+                <YAxis
+                    tick={TICK}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={compact}
+                    allowDecimals={!integer}
+                    width={40}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                    content={<ChartTooltip valueLabel={valueLabel} unit={unit} color={color} />}
+                />
+                <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+            </BarChart>
+        </ResponsiveContainer>
+    </Box>
+);
 
 /**
  * Line chart with markers; null values leave a gap.
  * data: [{ key, label, tooltipTitle, value|null }], bands: [{ value, label }] reference lines
  */
-export const LineChart = ({ data, color = VIZ.blue, height = 220, unit = '', valueLabel = 'Value', bands = [] }) => {
-    const [ref, width] = useWidth();
-    const [hover, setHover] = useState(null);
-    const m = { top: 12, right: 64, bottom: 26, left: 40 };
-    const innerW = Math.max(0, width - m.left - m.right);
-    const innerH = height - m.top - m.bottom;
-    const values = data.map((d) => d.value).filter((v) => v != null);
-    const { max, ticks } = niceScale(Math.max(...values, ...bands.map((b) => b.value), 0));
-    const step = data.length > 1 ? innerW / (data.length - 1) : 0;
-    const x = (i) => (data.length > 1 ? i * step : innerW / 2);
-    const y = (v) => innerH - (v / max) * innerH;
-    const labelEvery = Math.max(1, Math.ceil(44 / Math.max(step, 1)));
-
-    // Split into runs of consecutive non-null points.
-    const runs = [];
-    let run = [];
-    data.forEach((d, i) => {
-        if (d.value == null) { if (run.length) runs.push(run); run = []; } else run.push(i);
-    });
-    if (run.length) runs.push(run);
-
-    const h = hover != null ? data[hover] : null;
-    return (
-        <Box ref={ref} sx={{ position: 'relative', width: '100%' }} onMouseLeave={() => setHover(null)}>
-            {width > 0 && (
-                <svg width={width} height={height} role="img" aria-label={`${valueLabel} line chart`}>
-                    <g transform={`translate(${m.left},${m.top})`}>
-                        {ticks.map((t) => (
-                            <g key={t}>
-                                <line x1={0} x2={innerW} y1={y(t)} y2={y(t)} stroke={t === 0 ? VIZ.axis : VIZ.grid} />
-                                <text x={-8} y={y(t)} dy="0.32em" textAnchor="end" style={TICK_FONT}>{t}</text>
-                            </g>
-                        ))}
-                        {bands.filter((b) => b.value <= max).map((b) => (
-                            <g key={b.label}>
-                                <line x1={0} x2={innerW} y1={y(b.value)} y2={y(b.value)}
-                                      stroke={VIZ.axis} strokeDasharray="3 4" />
-                                <text x={innerW + 6} y={y(b.value)} dy="0.32em" style={{ ...TICK_FONT, fontSize: 10 }}>{b.label}</text>
-                            </g>
-                        ))}
-                        {hover != null && <line x1={x(hover)} x2={x(hover)} y1={0} y2={innerH} stroke={VIZ.axis} />}
-                        {runs.map((r) => (
-                            <polyline key={r[0]} fill="none" stroke={color} strokeWidth={2}
-                                      strokeLinejoin="round" strokeLinecap="round"
-                                      points={r.map((i) => `${x(i)},${y(data[i].value)}`).join(' ')} />
-                        ))}
-                        {data.map((d, i) => d.value != null && (
-                            <circle key={d.key} cx={x(i)} cy={y(d.value)} r={hover === i ? 5 : 4}
-                                    fill={color} stroke="#ffffff" strokeWidth={2} />
-                        ))}
-                        {data.map((d, i) => i % labelEvery === (data.length - 1) % labelEvery && (
-                            <text key={`l${d.key}`} x={x(i)} y={innerH + 17} textAnchor="middle" style={TICK_FONT}>{d.label}</text>
-                        ))}
-                        {data.map((d, i) => (
-                            <rect key={`h${d.key}`} x={x(i) - step / 2} y={0} width={Math.max(step, 24)} height={innerH}
-                                  fill="transparent" onMouseEnter={() => setHover(i)} />
-                        ))}
-                    </g>
-                </svg>
-            )}
-            {h && (
-                <Tip x={m.left + x(hover)} y={m.top + (h.value != null ? y(h.value) : innerH / 2)} width={width}>
-                    <TipTitle>{h.tooltipTitle ?? h.label}</TipTitle>
-                    <TipLine label={valueLabel} value={h.value != null ? `${h.value}${unit}` : 'No workouts'} color={color} />
-                    {h.extra?.map((e) => <TipLine key={e.label} label={e.label} value={e.value} />)}
-                </Tip>
-            )}
-        </Box>
-    );
-};
+export const LineChart = ({ data, color = VIZ.blue, height = 220, unit = '', valueLabel = 'Value', bands = [] }) => (
+    <Box sx={{ width: '100%', height }} role="img" aria-label={`${valueLabel} line chart`}>
+        <ResponsiveContainer width="100%" height="100%">
+            <RechartsLineChart data={data} margin={{ top: 12, right: 64, bottom: 4, left: 4 }}>
+                <CartesianGrid vertical={false} stroke={VIZ.grid} />
+                <XAxis
+                    dataKey="label"
+                    tick={TICK}
+                    tickLine={false}
+                    axisLine={{ stroke: VIZ.axis }}
+                    interval="preserveStartEnd"
+                    minTickGap={28}
+                />
+                <YAxis tick={TICK} tickLine={false} axisLine={false} width={40} />
+                {bands.map((b) => (
+                    <ReferenceLine
+                        key={b.label}
+                        y={b.value}
+                        stroke={VIZ.axis}
+                        strokeDasharray="3 4"
+                        label={{ value: b.label, position: 'right', fill: VIZ.muted, fontSize: 10 }}
+                    />
+                ))}
+                <Tooltip
+                    content={<ChartTooltip valueLabel={valueLabel} unit={unit} color={color} emptyLabel="No workouts" />}
+                />
+                <Line
+                    type="linear"
+                    dataKey="value"
+                    stroke={color}
+                    strokeWidth={2}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                    dot={{ r: 4, fill: color, stroke: '#ffffff', strokeWidth: 2 }}
+                    activeDot={{ r: 5, fill: color, stroke: '#ffffff', strokeWidth: 2 }}
+                />
+            </RechartsLineChart>
+        </ResponsiveContainer>
+    </Box>
+);
 
 /**
  * Horizontal bars, sorted by the caller. Labels on the left, value at the bar end.
