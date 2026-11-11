@@ -1,0 +1,213 @@
+# Requirements — AI-Powered Fitness Microservices
+#
+# This is a plain-text checklist of everything needed to run the project.
+# It is NOT a pip requirements file: the project has no Python dependencies.
+#
+# The README links here from "Setup & Installation" and keeps only a short
+# quick-start. Update both files together if a tool or version changes.
+
+## 1. Tooling
+
+Java          >= 17        (the services are built with Java 17)
+Maven         >= 3.9
+Node.js       >= 18        (npm is bundled with it)
+npm           latest       (shipped with Node.js)
+Docker        Desktop      (recommended, runs all infrastructure)
+Git                        (to clone the repository)
+
+Without Docker Desktop you need local installations of:
+PostgreSQL, MongoDB, RabbitMQ and Keycloak, configured as described below.
+
+## 2. Accounts and keys
+
+Google Gemini API key     required by the AI Service
+                          create one at https://aistudio.google.com/
+
+Keycloak admin account    only when bootstrapping the realm yourself
+                          (the quick-start creates admin/admin automatically)
+
+## 3. Services and ports
+
+The application expects these ports to be free:
+
+Config Server     8888
+Eureka Server     8761
+API Gateway       8080
+User Service      8081
+Activity Service  8082
+AI Service        8083
+React Frontend    5173
+Keycloak          8181
+PostgreSQL        5432
+MongoDB           27017
+RabbitMQ          5672   (management UI on 15672)
+
+## 4. PostgreSQL (User Service)
+
+Create the database before starting the User Service:
+
+    CREATE DATABASE fitness_user_db;
+
+The User Service reads its credentials from the environment, not from
+committed configuration:
+
+    POSTGRES_USER=postgres                  (optional, defaults to postgres)
+    POSTGRES_PASSWORD=your_postgres_password
+
+`user-service.yml` refers to them as placeholders:
+
+    spring:
+      datasource:
+        username: ${POSTGRES_USER:postgres}
+        password: ${POSTGRES_PASSWORD}
+
+The Config Server passes these through unresolved, so POSTGRES_PASSWORD must
+be set in the User Service process environment, not the Config Server's. On
+Windows, set it once for your user account:
+
+    [Environment]::SetEnvironmentVariable("POSTGRES_PASSWORD", "your_postgres_password", "User")
+
+POSTGRES_PASSWORD has no default. If it is not set, the User Service fails at
+startup with: Could not resolve placeholder 'POSTGRES_PASSWORD'.
+
+## 5. MongoDB (Activity Service, AI Service)
+
+The application expects MongoDB on:
+
+    mongodb://localhost:27017
+
+Databases used:
+
+    fitnessactivity
+    fitnessrecommendation
+
+MongoDB must run as a replica set, because the Activity Service writes the
+activity and its outbox event in one transaction. `docker-compose.yml` runs a
+single-node replica set (rs0) and `start-all.ps1` initialises it. For a local
+installation, start `mongod` with:
+
+    mongod --replSet rs0 --dbpath <path>
+
+and initialise it once with `rs.initiate()` in `mongosh`.
+
+## 6. RabbitMQ (Activity Service -> AI Service)
+
+Default configuration:
+
+    Host: localhost
+    Port: 5672
+    Username: guest
+    Password: guest
+
+Topology created by the application (shared module `fitness-common`):
+
+    Exchange:    fitness.exchange
+    Queue:       activity.queue
+    Routing Key: activity.tracking
+
+When an activity is created, the Activity Service publishes it to RabbitMQ and
+the AI Service consumes the message and generates the recommendation.
+
+## 7. Gemini API (AI Service)
+
+Create a Gemini API key in Google AI Studio and set:
+
+    GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=
+    GEMINI_API_KEY=YOUR_API_KEY
+
+`GeminiService` builds the request URI by concatenating the two values:
+
+    .uri(geminiApiUrl + geminiApiKey)
+
+so GEMINI_URL must be the full model endpoint and must end with the trailing
+`?key=`.
+
+Google retires older models periodically. If the AI Service logs a 404 like
+"This model models/... is no longer available", the response names the current
+replacement - put that model into GEMINI_URL. Check a key and model in one
+call before starting the service:
+
+    $k = "YOUR_API_KEY"
+    $u = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$k"
+    Invoke-RestMethod -Method Post -Uri $u -ContentType "application/json" `
+      -Body '{"contents":[{"parts":[{"text":"Say hello"}]}]}'
+
+A `candidates` array means the key and model are both good. A 400 with
+`API_KEY_INVALID` means the key is wrong; a 404 means the model name needs
+updating.
+
+Never commit your actual API key to GitHub.
+
+The AI Service reads these values through:
+
+    gemini:
+      api:
+        url: ${GEMINI_URL}
+        key: ${GEMINI_API_KEY}
+
+## 8. Keycloak (authentication)
+
+The application expects Keycloak at:
+
+    http://localhost:8181
+    Realm:    fitness-oauth2
+    Client:   oauth2-pkce-client   (public, OAuth2 PKCE, S256)
+
+The frontend uses these values in `fitness-app-frontend/src/authConfig.js`;
+the gateway and every service validate tokens against the realm's
+`jwk-set-uri` in `api-gateway.yml`. The redirect URI must be
+`http://localhost:5173`.
+
+### Bootstrapping the realm
+
+Starting from an empty Keycloak, run it and create the realm, the PKCE client
+and a test user:
+
+    docker run -d --name fitness-keycloak -p 8181:8080 `
+      -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin `
+      quay.io/keycloak/keycloak:26.0 start-dev
+
+Wait ~30 seconds for Keycloak to boot, then:
+
+    $KC = "http://localhost:8181"
+    $tok = (Invoke-RestMethod -Method Post -Uri "$KC/realms/master/protocol/openid-connect/token" `
+      -Body @{client_id='admin-cli';username='admin';password='admin';grant_type='password'}).access_token
+    $H = @{ Authorization = "Bearer $tok"; 'Content-Type' = 'application/json' }
+
+    Invoke-RestMethod -Method Post -Uri "$KC/admin/realms" -Headers $H `
+      -Body '{"realm":"fitness-oauth2","enabled":true}'
+
+    Invoke-RestMethod -Method Post -Uri "$KC/admin/realms/fitness-oauth2/clients" -Headers $H -Body @'
+    {"clientId":"oauth2-pkce-client","enabled":true,"publicClient":true,"standardFlowEnabled":true,
+     "directAccessGrantsEnabled":true,"redirectUris":["http://localhost:5173/*","http://localhost:5173"],
+     "webOrigins":["http://localhost:5173","+"],"attributes":{"pkce.code.challenge.method":"S256"}}
+    '@
+
+    Invoke-RestMethod -Method Post -Uri "$KC/admin/realms/fitness-oauth2/users" -Headers $H -Body @'
+    {"username":"testuser","email":"testuser@fitness.local","emailVerified":true,"firstName":"Test",
+     "lastName":"User","enabled":true,"credentials":[{"type":"password","value":"test1234","temporary":false}]}
+    '@
+
+The gateway's `KeycloakUserSyncFilter` reads the `sub`, `email`,
+`given_name` and `family_name` claims to auto-register users, so the test user
+needs an email, first name and last name set.
+
+`start-all.ps1` performs all of this for you, including turning on self
+sign-up, so the manual steps are only needed when running Keycloak yourself.
+
+## 9. Environment variables summary
+
+Variable             Required  Default                  Used by
+POSTGRES_USER        no        postgres                 User Service
+POSTGRES_PASSWORD    yes       -                        User Service
+GEMINI_URL           yes       -                        AI Service
+GEMINI_API_KEY       yes       -                        AI Service
+
+The quick-start reads them from `.env` (copy `.env.example` to `.env`).
+Values already exported in your shell take precedence.
+
+## 10. Secrets
+
+Never commit API keys, database passwords, OAuth credentials or other secrets
+to the repository. Use environment variables (`.env` is ignored by Git) or a
+secure secrets manager.
