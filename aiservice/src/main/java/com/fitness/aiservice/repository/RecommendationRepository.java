@@ -11,6 +11,5 @@ import java.util.Optional;
 public interface RecommendationRepository extends MongoRepository<Recommendation, String> {
     List<Recommendation> findByUserId(String userId);
 
-    /** Newest first, so older duplicates (from before de-duplication) never break lookups. */
     Optional<Recommendation> findFirstByActivityIdOrderByCreatedAtDesc(String activityId);
 }

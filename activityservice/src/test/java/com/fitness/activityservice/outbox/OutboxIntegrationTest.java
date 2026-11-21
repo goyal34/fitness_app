@@ -41,10 +41,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.data.mongodb.core.query.Criteria.where;
 
-/**
- * Transactional Outbox, tested against a real MongoDB replica set and a real
- * RabbitMQ broker (Docker, via Testcontainers).
- */
 @Testcontainers
 @SpringBootTest(properties = {
         "spring.cloud.config.enabled=false",
@@ -56,7 +52,6 @@ import static org.springframework.data.mongodb.core.query.Criteria.where;
         "rabbitmq.exchange.name=fitness.exchange",
         "rabbitmq.queue.name=activity.queue",
         "rabbitmq.routing.key=activity.tracking",
-        // Tests trigger the publisher themselves.
         "outbox.publisher.interval-ms=3600000",
         "outbox.publisher.max-attempts=3",
 })
@@ -66,12 +61,12 @@ class OutboxIntegrationTest {
 
     @Container
     @ServiceConnection
-    static MongoDBContainer mongo = new MongoDBContainer("mongo:7"); // starts as a replica set
+    static MongoDBContainer mongo = new MongoDBContainer("mongo:7");
 
     @Container
     @ServiceConnection
     static RabbitMQContainer rabbit = new RabbitMQContainer("rabbitmq:3-management")
-            .withStartupTimeout(Duration.ofMinutes(3)); // can take over a minute to boot on Docker Desktop
+            .withStartupTimeout(Duration.ofMinutes(3));
 
     @Autowired ActivityService activityService;
     @Autowired OutboxPublisher publisher;
@@ -133,7 +128,6 @@ class OutboxIntegrationTest {
     void keepsTheEventPendingWhileRabbitCannotDeliverIt_thenSendsItLater() {
         activityService.trackActivity(request());
 
-        // No queue bound: RabbitMQ returns the message as unroutable.
         rabbitAdmin.deleteQueue(QUEUE);
         publisher.publishPending();
 
@@ -141,9 +135,8 @@ class OutboxIntegrationTest {
         assertThat(failed.getStatus()).isEqualTo(OutboxStatus.PENDING);
         assertThat(failed.getAttempts()).isEqualTo(1);
         assertThat(failed.getLastError()).contains("unroutable");
-        assertThat(failed.getNextAttemptAt()).isAfter(Instant.now()); // backing off
+        assertThat(failed.getNextAttemptAt()).isAfter(Instant.now());
 
-        // Broker is fine again, and the backoff has passed.
         rabbitAdmin.declareQueue(activityQueue);
         rabbitAdmin.declareBinding(activityBinding);
         makeDueNow();

@@ -212,7 +212,7 @@ and configure those first.
 * Java 17+, Maven 3.9+, Node.js 18+ and npm
 * Docker Desktop (recommended) **or** local PostgreSQL, MongoDB, RabbitMQ and Keycloak
 * `POSTGRES_PASSWORD` set for the User Service (no default)
-* `GEMINI_URL` and `GEMINI_API_KEY` set for the AI Service
+* `GEMINI_API_KEY` set for the AI Service (`GEMINI_MODEL` is optional)
 * Keycloak realm `fitness-oauth2` with the `oauth2-pkce-client` client
 
 ---
@@ -654,8 +654,8 @@ causes, both reported in the response body:
 
 * `400` with `API_KEY_INVALID` — the key is wrong. Copy it again from AI Studio using the copy
   button rather than selecting the text.
-* `404` with `This model models/... is no longer available` — the model in `GEMINI_URL` has been
-  retired. The message names the replacement; update `GEMINI_URL` and restart the service.
+* `404` with `This model models/... is no longer available` — the model in `GEMINI_MODEL` has been
+  retired. The message names the replacement; update `GEMINI_MODEL` and restart the service.
 
 Messages that fail are requeued by RabbitMQ, so once the cause is fixed and the service restarts,
 the backlog is processed automatically and earlier activities get their recommendations.

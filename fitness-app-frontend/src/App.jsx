@@ -20,8 +20,6 @@ import theme from "./theme";
 import { SignUpContext } from "./signUp";
 
 const ActivitiesPage = ({ notify }) => {
-  // Cached by RTK Query: revisiting the page reuses the list, and mutations
-  // invalidate it so it refetches in the background.
   const { data: activities = [], isLoading, isError } = useGetActivitiesQuery();
   const [deleteActivity] = useDeleteActivityMutation();
 
@@ -35,7 +33,6 @@ const ActivitiesPage = ({ notify }) => {
 
   const handleDelete = async (activity) => {
     try {
-      // The cache is updated optimistically and rolled back on failure.
       await deleteActivity(activity.id).unwrap();
       notify('Activity deleted.', 'success');
     } catch (error) {
@@ -87,8 +84,6 @@ function App() {
     setToast({ open: true, message, severity });
   }, []);
 
-  // Clear the saved login as well as the Keycloak session, and drop any
-  // cached API data so the next user never sees the previous user's records.
   const handleLogout = () => {
     dispatch(logout());
     dispatch(fitnessApi.util.resetApiState());

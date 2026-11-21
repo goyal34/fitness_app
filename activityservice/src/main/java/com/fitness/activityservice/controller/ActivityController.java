@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/** The caller is always the "sub" of their verified token. */
 @RestController
 @RequestMapping("/api/activities")
 @AllArgsConstructor
@@ -22,7 +21,6 @@ public class ActivityController {
     @PostMapping
     public ResponseEntity<ActivityResponse> trackActivity(@RequestBody ActivityRequest request,
                                                           @AuthenticationPrincipal Jwt jwt){
-        // Never trust a userId sent in the body.
         request.setUserId(jwt.getSubject());
         return ResponseEntity.ok(activityService.trackActivity(request));
     }

@@ -9,9 +9,6 @@ import { activityStyle } from '../../theme';
 import { ActivityHeatmap, BarList, ColumnChart, LineChart, SegmentedBar } from './charts';
 import { VIZ } from './vizTokens';
 
-// All numbers come pre-aggregated from GET /api/activities/analytics/dashboard;
-// this page only formats them.
-
 const LEVEL_COLORS = {
     LOW: { color: VIZ.ramp[0], text: VIZ.ink },
     MODERATE: { color: VIZ.ramp[1], text: '#ffffff' },
@@ -27,7 +24,6 @@ const daysInMonth = (ym) => { const [y, m] = ym.split('-').map(Number); return n
 const hours = (minutes) => (minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`);
 const n = (v) => Number(v ?? 0).toLocaleString();
 
-/** ▲/▼ with text, never colour alone. More is treated as better for every metric. */
 const Delta = ({ change, changePercent, previous }) => {
     if (!change) return <Typography component="span" sx={{ fontSize: 12, color: VIZ.muted }}>No change</Typography>;
     const up = change > 0;
@@ -49,7 +45,6 @@ const StatTile = ({ label, value, sub }) => (
     </Card>
 );
 
-/** Card with a title and a Chart/Table switch, so every chart has a table view. */
 const ChartCard = ({ title, subtitle, table, children }) => {
     const [showTable, setShowTable] = useState(false);
     return (
@@ -119,8 +114,6 @@ const LoadingState = () => (
 
 const AnalyticsDashboard = () => {
     const navigate = useNavigate();
-    // Cached and invalidated by the add/delete activity mutations, so the
-    // dashboard is already fresh when the user switches to this page.
     const { data, isLoading, isError, refetch } = useGetAnalyticsDashboardQuery();
 
     if (isError) {
@@ -151,7 +144,6 @@ const AnalyticsDashboard = () => {
     const change = (metric) => monthComparison.changes.find((c) => c.metric === metric);
     const cur = monthComparison.current;
     const prev = monthComparison.previous;
-    // The running month is compared month-to-date, e.g. "Nov 1–10" vs "Oct 1–10".
     const span = (ym) => (monthComparison.monthToDate
         ? `${monthShort(ym)} 1–${Math.min(monthComparison.throughDay, daysInMonth(ym))}`
         : monthShort(ym));
@@ -180,7 +172,6 @@ const AnalyticsDashboard = () => {
                 </Typography>
             </Box>
 
-            {/* Headline tiles */}
             <Grid2 container spacing={2} sx={{ mb: 2 }}>
                 <Grid2 size={{ xs: 6, md: 3 }}>
                     <StatTile label="Current streak"
@@ -205,7 +196,6 @@ const AnalyticsDashboard = () => {
             </Grid2>
 
             <Grid2 container spacing={2}>
-                {/* Weekly duration */}
                 <Grid2 size={{ xs: 12, md: 7 }}>
                     <ChartCard title="Weekly workout duration"
                                subtitle={`Minutes per week · average ${hours(Math.round(weeklyDuration.averageMinutesPerWeek))}`}
@@ -217,7 +207,6 @@ const AnalyticsDashboard = () => {
                     </ChartCard>
                 </Grid2>
 
-                {/* Streaks + calendar */}
                 <Grid2 size={{ xs: 12, md: 5 }}>
                     <ChartCard title="Workout streaks" subtitle="Each square is a day, last 12 weeks">
                         <Box sx={{ display: 'flex', gap: 3, mb: 2, flexWrap: 'wrap' }}>
@@ -242,7 +231,6 @@ const AnalyticsDashboard = () => {
                     </ChartCard>
                 </Grid2>
 
-                {/* Monthly calories */}
                 <Grid2 size={{ xs: 12, md: 7 }}>
                     <ChartCard title="Monthly calories burned"
                                subtitle={`Last 12 months · average ${n(Math.round(monthlyCalories.averageCaloriesPerMonth))} kcal/month`}
@@ -254,7 +242,6 @@ const AnalyticsDashboard = () => {
                     </ChartCard>
                 </Grid2>
 
-                {/* Month comparison */}
                 <Grid2 size={{ xs: 12, md: 5 }}>
                     <ChartCard title="This month vs last month"
                                subtitle={monthComparison.monthToDate
@@ -283,7 +270,6 @@ const AnalyticsDashboard = () => {
                     </ChartCard>
                 </Grid2>
 
-                {/* Frequency by type */}
                 <Grid2 size={{ xs: 12, md: 6 }}>
                     <ChartCard title="Exercise frequency"
                                subtitle={`Last ${frequency.days} days · ${frequency.workoutsPerWeek} workouts per week`}
@@ -302,7 +288,6 @@ const AnalyticsDashboard = () => {
                     </ChartCard>
                 </Grid2>
 
-                {/* Frequency by weekday */}
                 <Grid2 size={{ xs: 12, md: 6 }}>
                     <ChartCard title="Workouts by day of week" subtitle={`Last ${frequency.days} days`}
                                table={{ columns: ['Day', 'Workouts'], rows: frequency.byWeekday.map((d) => [d.label, d.workouts]) }}>
@@ -311,7 +296,6 @@ const AnalyticsDashboard = () => {
                     </ChartCard>
                 </Grid2>
 
-                {/* Intensity */}
                 <Grid2 size={{ xs: 12, md: 7 }}>
                     <ChartCard title="Average workout intensity"
                                subtitle="Calories burned per minute, by week"
@@ -335,7 +319,6 @@ const AnalyticsDashboard = () => {
                     </ChartCard>
                 </Grid2>
 
-                {/* Personal bests */}
                 <Grid2 size={12}>
                     <ChartCard title="Personal bests" subtitle="All time">
                         <Grid2 container spacing={1.5} sx={{ mb: 2 }}>

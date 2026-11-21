@@ -19,11 +19,6 @@ public class ActivityAIService {
 
     private final GeminiService geminiService;
 
-    /**
-     * Asks Gemini for a structured report on the activity.
-     *
-     * @throws IllegalStateException if Gemini is not configured or returns no usable report
-     */
     public Recommendation generateRecommendation(ActivityEvent activity) {
         if (!geminiService.isConfigured()) {
             throw new IllegalStateException("The AI service has no Gemini API key configured.");
@@ -48,7 +43,6 @@ public class ActivityAIService {
                 .build();
     }
 
-    /** A FAILED record, so the UI can stop waiting and explain what happened. */
     public Recommendation failedRecommendation(ActivityEvent activity, String reason) {
         return Recommendation.builder()
                 .activityId(activity.getId())
@@ -60,7 +54,6 @@ public class ActivityAIService {
                 .build();
     }
 
-    /** Guards against missing or out-of-range values so the UI never has to. */
     private AiReport clean(AiReport r) {
         if (r.getSummary() == null || r.getSummary().isBlank()) {
             throw new IllegalStateException("Gemini's report had no summary.");

@@ -6,7 +6,6 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Each service checks the token itself, so calls that skip the gateway are rejected.
           jwk-set-uri: http://localhost:8181/realms/fitness-oauth2/protocol/openid-connect/certs
   data:
     mongodb:
@@ -18,11 +17,8 @@ spring:
     username: guest
     password: guest
   ai:
-    # Disable Spring AI chat auto-config: it refuses empty API keys. GeminiAiConfig
-    # creates ChatClient only when gemini.api.key is set.
     model:
       chat: none
-
 
 eureka:
   instance:
@@ -30,7 +26,6 @@ eureka:
   client:
     serviceUrl:
       defaultZone: http://localhost:8761/eureka/
-
 
 rabbitmq:
   exchange:
@@ -40,9 +35,7 @@ rabbitmq:
   routing:
     key: activity.tracking
 
-
 gemini:
   api:
     key: ${GEMINI_API_KEY:}
-    # Override with GEMINI_MODEL when Google retires a model name.
     model: ${GEMINI_MODEL:gemini-2.5-flash}

@@ -22,8 +22,6 @@ public class SecurityConfig {
         return http
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchange -> exchange
-                        // Internal User Service endpoints. Only the gateway itself and
-                        // the Activity Service call these, directly through Eureka.
                         .pathMatchers("/api/users/register", "/api/users/*/validate").denyAll()
                         .anyExchange().authenticated()
                 )

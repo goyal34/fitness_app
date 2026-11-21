@@ -112,23 +112,24 @@ the AI Service consumes the message and generates the recommendation.
 
 Create a Gemini API key in Google AI Studio and set:
 
-    GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=
     GEMINI_API_KEY=YOUR_API_KEY
+    GEMINI_MODEL=gemini-2.5-flash      (optional, this is the default)
 
-`GeminiService` builds the request URI by concatenating the two values:
+The AI Service calls Gemini through Spring AI's `ChatClient`
+(`GeminiAiConfig` builds it with Google's GenAI SDK), so there is no endpoint
+URL to configure - only the key and the model name.
 
-    .uri(geminiApiUrl + geminiApiKey)
-
-so GEMINI_URL must be the full model endpoint and must end with the trailing
-`?key=`.
+Without `GEMINI_API_KEY` the service still starts, logs
+`GEMINI_API_KEY is not set`, and leaves recommendations ungenerated. Set the
+key in `.env` (or the environment) and restart the service.
 
 Google retires older models periodically. If the AI Service logs a 404 like
 "This model models/... is no longer available", the response names the current
-replacement - put that model into GEMINI_URL. Check a key and model in one
-call before starting the service:
+replacement - put that model name into `GEMINI_MODEL`. You can check a key and
+model in one call before starting the service:
 
     $k = "YOUR_API_KEY"
-    $u = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$k"
+    $u = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$k"
     Invoke-RestMethod -Method Post -Uri $u -ContentType "application/json" `
       -Body '{"contents":[{"parts":[{"text":"Say hello"}]}]}'
 
@@ -142,8 +143,12 @@ The AI Service reads these values through:
 
     gemini:
       api:
-        url: ${GEMINI_URL}
-        key: ${GEMINI_API_KEY}
+        key: ${GEMINI_API_KEY:}
+        model: ${GEMINI_MODEL:gemini-2.5-flash}
+
+`spring.ai.model.chat` is set to `none` in `ai-service.yml` so Spring AI's own
+auto-configuration never refuses to start on an empty key; `GeminiAiConfig`
+creates the `ChatClient` only when a key is present.
 
 ## 8. Keycloak (authentication)
 
@@ -200,8 +205,8 @@ sign-up, so the manual steps are only needed when running Keycloak yourself.
 Variable             Required  Default                  Used by
 POSTGRES_USER        no        postgres                 User Service
 POSTGRES_PASSWORD    yes       -                        User Service
-GEMINI_URL           yes       -                        AI Service
 GEMINI_API_KEY       yes       -                        AI Service
+GEMINI_MODEL         no        gemini-2.5-flash         AI Service
 
 The quick-start reads them from `.env` (copy `.env.example` to `.env`).
 Values already exported in your shell take precedence.

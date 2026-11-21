@@ -1,6 +1,5 @@
 import { createTheme } from '@mui/material/styles';
 
-// Visual identity for each activity type, used by cards, chips and icons.
 export const ACTIVITY_STYLES = {
     RUNNING: { label: 'Running', color: '#ef6c00', emoji: '🏃' },
     WALKING: { label: 'Walking', color: '#2e7d32', emoji: '🚶' },

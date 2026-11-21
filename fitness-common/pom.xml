@@ -6,7 +6,7 @@
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>3.4.3</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<relativePath/>
 	</parent>
 	<groupId>com.fitness</groupId>
 	<artifactId>fitness-common</artifactId>
@@ -19,12 +19,6 @@
 	</properties>
 
 	<dependencies>
-		<!--
-			The configuration in this module only applies when the consuming
-			service already brings the matching starter, so these are optional:
-			they are needed to compile the auto-configuration but must not leak
-			into services that only use the shared DTOs.
-		-->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-autoconfigure</artifactId>
@@ -50,14 +44,11 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- spring-rabbit keeps Jackson optional; the services that use the
-		     RabbitMQ topology already have it through their web/Mongo starters. -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Needed by WebApplicationContextRunner (and by SecurityFilterChain at runtime). -->
 		<dependency>
 			<groupId>jakarta.servlet</groupId>
 			<artifactId>jakarta.servlet-api</artifactId>

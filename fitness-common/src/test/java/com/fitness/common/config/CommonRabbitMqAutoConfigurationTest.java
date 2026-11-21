@@ -10,11 +10,6 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * The RabbitMQ topology must be declared only where the rabbitmq.* names exist,
- * because every service depends on fitness-common (including the gateway, which
- * has no AMQP client).
- */
 class CommonRabbitMqAutoConfigurationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()

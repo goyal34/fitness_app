@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EnableScheduling // runs the outbox publisher
+@EnableScheduling
 public class ActivityserviceApplication {
 
 	public static void main(String[] args) {

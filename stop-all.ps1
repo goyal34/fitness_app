@@ -1,12 +1,4 @@
 #Requires -Version 5.1
-<#
-.SYNOPSIS
-    Stops the services started by start-all.ps1.
-
-.PARAMETER KeepInfra
-    Stop the Spring Boot/frontend processes but leave Docker containers
-    (PostgreSQL, MongoDB, RabbitMQ, Keycloak) running.
-#>
 [CmdletBinding()]
 param(
     [switch]$KeepInfra
@@ -103,9 +95,6 @@ if (Test-Path -LiteralPath $StateFile) {
     }
 }
 
-# Also find leftovers even when the launcher state file exists. Maven can
-# re-parent its child JVMs, so a recorded cmd.exe PID may be gone while the
-# Spring Boot process is still listening.
 Write-Info "Checking for leftover fitness app processes..."
 
 $patterns = @(

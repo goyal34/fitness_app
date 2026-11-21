@@ -8,10 +8,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
-/**
- * Calls the User Service on behalf of the logged-in user. The user's own token
- * is passed along, because the User Service checks it on every request.
- */
 @Service
 @Slf4j
 @RequiredArgsConstructor

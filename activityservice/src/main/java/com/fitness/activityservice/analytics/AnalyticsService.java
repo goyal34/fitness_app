@@ -14,14 +14,6 @@ import java.time.format.TextStyle;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 
-/**
- * Workout analytics, computed by MongoDB aggregation pipelines.
- *
- * Dates: a workout's date is its startTime (or createdAt for old records).
- * Both are stored as LocalDateTime, which Spring converts to UTC using the
- * JVM time zone, so grouping with that same zone gives back the user's
- * calendar days and weeks (weeks start on Monday).
- */
 @Service
 @RequiredArgsConstructor
 public class AnalyticsService {
@@ -32,8 +24,6 @@ public class AnalyticsService {
     private static final Document COUNT = new Document("$sum", 1);
 
     private final MongoTemplate mongoTemplate;
-
-    // ---------------------------------------------------------------- weekly duration
 
     public WeeklyDuration weeklyDuration(String userId, int weeks) {
         LocalDate first = weekStart(today()).minusWeeks(weeks - 1L);
@@ -57,8 +47,6 @@ public class AnalyticsService {
         return new WeeklyDuration(weeks, total, round1((double) total / weeks), points);
     }
 
-    // ---------------------------------------------------------------- monthly calories
-
     public MonthlyCalories monthlyCalories(String userId, int months) {
         YearMonth first = YearMonth.now(zone()).minusMonths(months - 1L);
         List<Document> rows = run(pipeline(matchUser(userId, first.atDay(1), null),
@@ -80,8 +68,6 @@ public class AnalyticsService {
         }
         return new MonthlyCalories(months, total, round1((double) total / months), points);
     }
-
-    // ---------------------------------------------------------------- frequency
 
     public Frequency frequency(String userId, int days) {
         LocalDate from = today().minusDays(days - 1L);
@@ -116,8 +102,6 @@ public class AnalyticsService {
         return new Frequency(days, total, round1(total / (days / 7.0)),
                 byType.isEmpty() ? null : byType.get(0).type(), byType, byWeekday);
     }
-
-    // ---------------------------------------------------------------- intensity
 
     public Intensity intensity(String userId, int weeks) {
         LocalDate first = weekStart(today()).minusWeeks(weeks - 1L);
@@ -160,8 +144,6 @@ public class AnalyticsService {
         return new Intensity(weeks, average, level == null ? null : level.name(),
                 level == null ? null : level.label(), weekly, distribution);
     }
-
-    // ---------------------------------------------------------------- personal bests
 
     public PersonalBests personalBests(String userId) {
         Document positiveDuration = new Document("duration", new Document("$gt", 0));
@@ -208,8 +190,6 @@ public class AnalyticsService {
                         .toList());
     }
 
-    // ---------------------------------------------------------------- streaks
-
     public Streaks streaks(String userId) {
         List<Document> rows = run(pipeline(matchUser(userId, null, null),
                 group(dayString()).append("workouts", COUNT).append("minutes", sumOf("duration")).wrap(),
@@ -235,13 +215,6 @@ public class AnalyticsService {
                 days.size(), days.isEmpty() ? null : days.last(), days.contains(today), recent);
     }
 
-    // ---------------------------------------------------------------- month comparison
-
-    /**
-     * Compares a month with the one before it. For the current (unfinished)
-     * month it is month-to-date: the 1st..today of this month against the
-     * same days of last month, so a half-finished month never looks like a drop.
-     */
     public MonthComparison monthComparison(String userId, YearMonth month) {
         YearMonth previous = month.minusMonths(1);
         LocalDate today = today();
@@ -285,8 +258,6 @@ public class AnalyticsService {
                 new Document("$addFields", new Document("activeDays", new Document("$size", "$days"))));
     }
 
-    // ---------------------------------------------------------------- totals + dashboard
-
     public Totals totals(String userId) {
         List<Document> rows = run(pipeline(matchUser(userId, null, null),
                 group(null)
@@ -312,9 +283,6 @@ public class AnalyticsService {
                 monthComparison(userId, YearMonth.now(zone())));
     }
 
-    // ---------------------------------------------------------------- pipeline helpers
-
-    /** $match on the user, add "at" (the workout date), then keep from <= at < toExclusive. */
     private List<Document> matchUser(String userId, LocalDate from, LocalDate toExclusive) {
         List<Document> stages = new ArrayList<>();
         stages.add(new Document("$match", new Document("userId", userId)));
@@ -359,7 +327,6 @@ public class AnalyticsService {
                 new Document("format", "%Y-%m-%d").append("date", "$at").append("timezone", tz()));
     }
 
-    /** $switch that labels "cpm" with an IntensityLevel name. */
     private static Document levelSwitch() {
         List<Document> branches = new ArrayList<>();
         IntensityLevel[] levels = IntensityLevel.values();
@@ -378,7 +345,6 @@ public class AnalyticsService {
         return new Group(id);
     }
 
-    /** Small builder so $group stages read top to bottom. */
     private static final class Group extends Document {
         Group(Object id) {
             super("_id", id);
@@ -399,12 +365,9 @@ public class AnalyticsService {
         return mongoTemplate.getCollection(COLLECTION).aggregate(pipeline).into(new ArrayList<>());
     }
 
-    /** A $facet stage always returns exactly one document. */
     private Document runFacet(List<Document> pipeline) {
         return run(pipeline).get(0);
     }
-
-    // ---------------------------------------------------------------- value helpers
 
     private BestWorkout bestWorkout(Document d, double value, String unit) {
         if (d == null) {

@@ -11,10 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 
-/**
- * The servlet security chain must be picked up by the User, Activity and AI
- * services, and must stay out of the reactive gateway.
- */
 class CommonSecurityAutoConfigurationTest {
 
     private final HttpSecurity http = mock(HttpSecurity.class, RETURNS_DEEP_STUBS);

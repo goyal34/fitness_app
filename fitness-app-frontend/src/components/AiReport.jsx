@@ -2,7 +2,6 @@ import {
     Alert, Box, Card, CardContent, Chip, CircularProgress, Divider, Grid2, Stack, Typography
 } from '@mui/material';
 
-// Colours for the enum values in Gemini's structured report.
 const INTENSITY = {
     LOW: { label: 'Low intensity', color: '#2e7d32' },
     MODERATE: { label: 'Moderate intensity', color: '#0277bd' },
@@ -67,10 +66,8 @@ const TipList = ({ items, marker, color }) => (
     </Stack>
 );
 
-/** The structured report from Gemini. */
 const StructuredReport = ({ report, model, createdAt }) => (
     <>
-        {/* Headline */}
         <Box sx={{
             display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap',
             p: 2.5, mb: 3, borderRadius: 3,
@@ -85,7 +82,6 @@ const StructuredReport = ({ report, model, createdAt }) => (
             </Box>
         </Box>
 
-        {/* Insights */}
         {report.analysis.length > 0 && (
             <Box sx={{ mb: 3 }}>
                 <SectionTitle emoji="📊">Analysis</SectionTitle>
@@ -104,7 +100,6 @@ const StructuredReport = ({ report, model, createdAt }) => (
             </Box>
         )}
 
-        {/* Strengths */}
         {report.strengths.length > 0 && (
             <Box sx={{ mb: 3 }}>
                 <SectionTitle emoji="💪">What went well</SectionTitle>
@@ -112,7 +107,6 @@ const StructuredReport = ({ report, model, createdAt }) => (
             </Box>
         )}
 
-        {/* Improvements */}
         {report.improvements.length > 0 && (
             <Box sx={{ mb: 3 }}>
                 <SectionTitle emoji="🎯">How to improve</SectionTitle>
@@ -140,7 +134,6 @@ const StructuredReport = ({ report, model, createdAt }) => (
             </Box>
         )}
 
-        {/* Next workouts */}
         {report.nextWorkouts.length > 0 && (
             <Box sx={{ mb: 3 }}>
                 <SectionTitle emoji="📅">Suggested next workouts</SectionTitle>
@@ -167,7 +160,6 @@ const StructuredReport = ({ report, model, createdAt }) => (
             </Box>
         )}
 
-        {/* Safety and recovery */}
         <Grid2 container spacing={3} sx={{ mb: 2 }}>
             {report.safety.length > 0 && (
                 <Grid2 size={{ xs: 12, md: 6 }}>
@@ -192,7 +184,6 @@ const StructuredReport = ({ report, model, createdAt }) => (
     </>
 );
 
-/** Reports saved before the structured format existed. */
 const LegacyReport = ({ rec }) => {
     const section = (title, items) => (
         <Box sx={{ mb: 2 }}>
@@ -212,7 +203,6 @@ const LegacyReport = ({ rec }) => {
     );
 };
 
-/** Card showing the AI report for an activity, or its loading / failed state. */
 const AiReport = ({ recommendation, waiting }) => (
     <Card>
         <CardContent sx={{ p: { xs: 2, sm: 3 } }}>

@@ -13,15 +13,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 
-/**
- * The queue, exchange and JSON converter shared by the Activity Service
- * (publisher) and the AI Service (consumer).
- *
- * Both services declaring the same topology is harmless and idempotent. The
- * configuration is skipped when a service has no AMQP client or has not
- * configured the rabbitmq.* names, so services that only use the shared DTOs
- * are unaffected.
- */
 @AutoConfiguration
 @ConditionalOnClass({Queue.class, DirectExchange.class, MessageConverter.class})
 @ConditionalOnProperty(prefix = "rabbitmq", name = {"queue.name", "exchange.name", "routing.key"})

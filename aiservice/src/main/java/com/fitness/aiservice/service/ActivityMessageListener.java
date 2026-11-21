@@ -20,17 +20,10 @@ public class ActivityMessageListener {
     private final ActivityAIService aiService;
     private final RecommendationRepository recommendationRepository;
 
-    /**
-     * Never throws: a thrown exception would put the message back on the queue
-     * and retry it forever (burning Gemini quota). Failures are saved as a
-     * FAILED report instead, so the UI can show what went wrong.
-     */
     @RabbitListener(queues = "activity.queue")
     public void processActivity(ActivityEvent activity) {
         log.info("Received activity for processing: {}", activity.getId());
 
-        // The outbox delivers at least once, so the same activity can arrive twice.
-        // Don't pay for a second Gemini call if a report already exists.
         Optional<Recommendation> existing =
                 recommendationRepository.findFirstByActivityIdOrderByCreatedAtDesc(activity.getId());
         if (existing.isPresent() && Recommendation.STATUS_COMPLETED.equals(existing.get().getStatus())) {
@@ -52,7 +45,6 @@ public class ActivityMessageListener {
             result = aiService.failedRecommendation(activity, e.getMessage());
         }
 
-        // One report per activity: replace an earlier FAILED one instead of adding another.
         Recommendation toSave = result;
         existing.ifPresent(previous -> toSave.setId(previous.getId()));
         recommendationRepository.save(toSave);

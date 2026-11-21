@@ -1,5 +1,3 @@
-// TEMPORARY scratch entry: renders the real ActivityForm/ActivityList with the
-// real theme, bypassing only the Keycloak auth gate. Delete after verifying.
 import { Container, CssBaseline, ThemeProvider } from '@mui/material';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -10,7 +8,6 @@ import ActivityList from './components/ActivityList';
 import { store } from './store/store';
 import theme, { ACTIVITY_STYLES } from './theme';
 
-// One sample activity per category so every chip/colour renders.
 const activities = Object.keys(ACTIVITY_STYLES).map((type, i) => ({
     id: String(i + 1),
     type,

@@ -6,11 +6,6 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.NavigableSet;
 import java.util.TreeSet;
 
-/**
- * Works out streaks from the set of days that had at least one workout.
- * MongoDB returns the distinct days; the consecutive-run logic lives here
- * because it is clearer (and easy to unit test) in plain Java.
- */
 public final class StreakCalculator {
 
     private StreakCalculator() {
@@ -24,7 +19,6 @@ public final class StreakCalculator {
             return new Result(0, 0, null, null, 0);
         }
 
-        // Longest run of consecutive days.
         int longest = 0;
         LocalDate longestStart = null;
         LocalDate longestEnd = null;
@@ -46,7 +40,6 @@ public final class StreakCalculator {
             previous = day;
         }
 
-        // Current streak: still alive if the last workout was today or yesterday.
         int current = 0;
         LocalDate cursor = days.contains(today) ? today : today.minusDays(1);
         while (days.contains(cursor)) {
@@ -54,8 +47,6 @@ public final class StreakCalculator {
             cursor = cursor.minusDays(1);
         }
 
-        // Weekly streak: consecutive weeks (Mon-Sun) with at least one workout,
-        // still alive if this week or last week had one.
         NavigableSet<LocalDate> weeks = new TreeSet<>();
         for (LocalDate day : days) {
             weeks.add(day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));

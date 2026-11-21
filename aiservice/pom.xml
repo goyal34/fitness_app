@@ -6,7 +6,7 @@
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>3.4.3</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<relativePath/>
 	</parent>
 	<groupId>com.fitness</groupId>
 	<artifactId>aiservice</artifactId>
@@ -31,6 +31,7 @@
 		<spring-cloud.version>2024.0.0</spring-cloud.version>
 		<spring-ai.version>1.1.8</spring-ai.version>
 		<fitness-common.version>0.0.1-SNAPSHOT</fitness-common.version>
+		<guava.version>33.4.0-jre</guava.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -93,6 +94,11 @@
 				<version>${spring-ai.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>com.google.guava</groupId>
+				<artifactId>guava</artifactId>
+				<version>${guava.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

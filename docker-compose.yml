@@ -1,14 +1,3 @@
-# Infrastructure only. The Spring Boot services and the React frontend run
-# locally (via Maven/npm) so they can be debugged from your IDE.
-#
-# Start everything with:  .\start-all.ps1
-# Stop everything with:   .\stop-all.ps1
-#
-# This file can also be used on its own:
-#   docker compose up -d
-#   docker compose logs -f
-#   docker compose stop
-
 name: fitness-app
 
 services:
@@ -30,16 +19,12 @@ services:
 
   mongodb:
     image: mongo:7
-    # Single-node replica set: MongoDB only supports multi-document
-    # transactions on a replica set, and the Activity Service saves each
-    # workout and its outbox event in one transaction.
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      # Also initialises the replica set the first time it runs.
       test: ["CMD-SHELL", "mongosh --quiet --eval \"try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }\" | grep -q 1"]
       interval: 5s
       timeout: 10s
@@ -70,7 +55,6 @@ services:
     ports:
       - "127.0.0.1:8181:8080"
     volumes:
-      # Keeps realms and user accounts when the container is recreated.
       - keycloak-data:/opt/keycloak/data
 
 volumes:
