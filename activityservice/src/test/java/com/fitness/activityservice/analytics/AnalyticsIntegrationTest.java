@@ -28,10 +28,6 @@ import java.util.function.ToLongFunction;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-/**
- * Runs the analytics pipelines on a real MongoDB and checks every number
- * against the same figure computed in plain Java from the same workouts.
- */
 @Testcontainers
 @SpringBootTest(properties = {
         "spring.cloud.config.enabled=false",
@@ -62,22 +58,20 @@ class AnalyticsIntegrationTest {
     void seed() {
         repository.deleteAll();
         List<Activity> data = new ArrayList<>(List.of(
-                activity(0, ActivityType.RUNNING, 30, 300),       // 10 kcal/min  HIGH
-                activity(1, ActivityType.CYCLING, 60, 480),       //  8           HIGH
-                activity(2, ActivityType.YOGA, 45, 135),          //  3           LOW
-                activity(10, ActivityType.RUNNING, 50, 600),      // 12           VERY_HIGH
-                activity(11, ActivityType.RUNNING, 20, 120),      //  6           MODERATE
-                activity(12, ActivityType.WALKING, 40, 160),      //  4           LOW
-                activity(13, ActivityType.WALKING, 30, 120),      //  4           LOW
-                activity(45, ActivityType.SWIMMING, 35, 350),     // 10           HIGH
-                activity(400, ActivityType.HIIT, 25, 375)));      // over a year ago: only in all-time stats
-        // An old record without startTime: its createdAt (now) is used instead.
+                activity(0, ActivityType.RUNNING, 30, 300),
+                activity(1, ActivityType.CYCLING, 60, 480),
+                activity(2, ActivityType.YOGA, 45, 135),
+                activity(10, ActivityType.RUNNING, 50, 600),
+                activity(11, ActivityType.RUNNING, 20, 120),
+                activity(12, ActivityType.WALKING, 40, 160),
+                activity(13, ActivityType.WALKING, 30, 120),
+                activity(45, ActivityType.SWIMMING, 35, 350),
+                activity(400, ActivityType.HIIT, 25, 375)));
         Activity legacy = activity(0, ActivityType.STRETCHING, 10, 30);
         legacy.setStartTime(null);
         data.add(legacy);
         mine = repository.saveAll(data);
 
-        // Someone else's workout must never show up.
         Activity other = activity(0, ActivityType.RUNNING, 999, 9999);
         other.setUserId("someone-else");
         repository.save(other);
@@ -128,7 +122,7 @@ class AnalyticsIntegrationTest {
         assertThat(result.totalWorkouts()).isEqualTo(count(inRange));
         assertThat(result.mostFrequentType()).isEqualTo("RUNNING");
         assertThat(result.byType().get(0).workouts()).isEqualTo(3);
-        assertThat(result.byType()).noneMatch(t -> t.type().equals("HIIT")); // older than 90 days
+        assertThat(result.byType()).noneMatch(t -> t.type().equals("HIIT"));
         assertThat(result.byWeekday()).hasSize(7);
         for (WeekdayCount day : result.byWeekday()) {
             assertThat(day.workouts()).as(day.label())
@@ -157,7 +151,7 @@ class AnalyticsIntegrationTest {
         assertThat(bests.longestWorkout().value()).isEqualTo(60);
         assertThat(bests.longestWorkout().type()).isEqualTo("CYCLING");
         assertThat(bests.mostCalories().value()).isEqualTo(600);
-        assertThat(bests.highestIntensity().value()).isEqualTo(15.0); // HIIT: 375 / 25
+        assertThat(bests.highestIntensity().value()).isEqualTo(15.0);
         assertThat(bests.highestIntensity().date()).isEqualTo(today.minusDays(400));
         assertThat(bests.byType()).anySatisfy(t -> {
             assertThat(t.type()).isEqualTo("RUNNING");
@@ -173,8 +167,8 @@ class AnalyticsIntegrationTest {
     void streaksCountConsecutiveDays() {
         Streaks streaks = analytics.streaks(USER);
 
-        assertThat(streaks.currentStreakDays()).isEqualTo(3);         // today, -1, -2
-        assertThat(streaks.longestStreakDays()).isEqualTo(4);         // -13 .. -10
+        assertThat(streaks.currentStreakDays()).isEqualTo(3);
+        assertThat(streaks.longestStreakDays()).isEqualTo(4);
         assertThat(streaks.longestStreakStart()).isEqualTo(today.minusDays(13));
         assertThat(streaks.longestStreakEnd()).isEqualTo(today.minusDays(10));
         assertThat(streaks.workedOutToday()).isTrue();
@@ -183,7 +177,7 @@ class AnalyticsIntegrationTest {
         assertThat(streaks.recentDays().get(streaks.recentDays().size() - 1).date()).isEqualTo(today);
         assertThat(streaks.recentDays().get(0).date().getDayOfWeek()).isEqualTo(DayOfWeek.MONDAY);
         assertThat(streaks.recentDays().stream().filter(d -> d.date().equals(today)).findFirst().orElseThrow().workouts())
-                .isEqualTo(2); // the RUNNING workout and the legacy one
+                .isEqualTo(2);
     }
 
     @Test
@@ -198,7 +192,6 @@ class AnalyticsIntegrationTest {
         assertThat(result.current().month()).isEqualTo(month.toString());
         assertThat(result.previous().month()).isEqualTo(previous.toString());
 
-        // This month so far vs the same days of last month.
         Predicate<Activity> thisMonth = a -> YearMonth.from(date(a)).equals(month);
         Predicate<Activity> lastMonthSameDays = a -> YearMonth.from(date(a)).equals(previous)
                 && date(a).getDayOfMonth() <= throughDay;
@@ -242,8 +235,6 @@ class AnalyticsIntegrationTest {
         assertThat(empty.streaks().currentStreakDays()).isZero();
         assertThat(empty.monthComparison().changes()).allMatch(c -> c.changePercent() == null);
     }
-
-    // ---------------------------------------------------------------- helpers
 
     private Activity activity(int daysAgo, ActivityType type, int minutes, int calories) {
         return Activity.builder()

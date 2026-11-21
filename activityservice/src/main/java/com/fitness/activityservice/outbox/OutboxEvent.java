@@ -10,13 +10,6 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
-/**
- * A message waiting to be sent to RabbitMQ (Transactional Outbox pattern).
- *
- * It is saved in the same MongoDB transaction as the activity it describes,
- * so either both exist or neither does. {@link OutboxPublisher} later sends
- * it and marks it PUBLISHED once RabbitMQ confirms it.
- */
 @Document(collection = "outbox_events")
 @Data
 @Builder
@@ -29,14 +22,11 @@ public class OutboxEvent {
     @Id
     private String id;
     private String eventType;
-    /** Id of the activity the event is about. */
     private String aggregateId;
-    /** The message body sent to RabbitMQ. */
     private ActivityEvent payload;
 
     private OutboxStatus status;
     private int attempts;
-    /** When the publisher may next try this event (also used as a short lease while sending). */
     private Instant nextAttemptAt;
     private String lastError;
     private Instant createdAt;

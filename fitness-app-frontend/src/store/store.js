@@ -7,7 +7,6 @@ export const store = configureStore({
         auth: authReducer,
         [fitnessApi.reducerPath]: fitnessApi.reducer,
     },
-    // Enables caching, invalidation and polling for RTK Query.
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(fitnessApi.middleware),
 });

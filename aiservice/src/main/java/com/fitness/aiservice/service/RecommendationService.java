@@ -18,7 +18,6 @@ public class RecommendationService {
         return recommendationRepository.findByUserId(userId);
     }
 
-    /** Returns the recommendation only if it belongs to the caller; otherwise 404. */
     public Recommendation getActivityRecommendation(String activityId, String userId) {
         return recommendationRepository.findFirstByActivityIdOrderByCreatedAtDesc(activityId)
                 .filter(rec -> rec.getUserId() != null && rec.getUserId().equals(userId))

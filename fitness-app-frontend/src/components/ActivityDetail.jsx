@@ -10,9 +10,6 @@ import {
     useGetActivityRecommendationQuery,
 } from '../services/fitnessApi';
 
-// The recommendation is produced asynchronously via RabbitMQ, so it may not
-// exist for a few seconds after an activity is created. RTK Query polls for it
-// rather than making the user refresh.
 const POLL_INTERVAL_MS = 4000;
 const POLL_ATTEMPTS = 15;
 
@@ -37,15 +34,12 @@ const ActivityDetail = () => {
         pollingInterval: polling ? POLL_INTERVAL_MS : 0,
     });
 
-    // A new activity gets a fresh poll budget.
     useEffect(() => {
         attemptsRef.current = 0;
         setExhausted(false);
         setPolling(true);
     }, [id]);
 
-    // Stop polling once a report (including a FAILED one) arrives, or after
-    // POLL_ATTEMPTS unsuccessful requests.
     useEffect(() => {
         if (recommendation) {
             setPolling(false);

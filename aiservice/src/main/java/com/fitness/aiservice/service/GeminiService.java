@@ -8,9 +8,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-/**
- * Calls Gemini through Spring AI with structured output mapped to {@link AiReport}.
- */
 @Slf4j
 @Service
 public class GeminiService {
@@ -35,7 +32,6 @@ public class GeminiService {
         return modelName;
     }
 
-    /** Sends the prompt and returns a typed {@link AiReport}. */
     public AiReport generateReport(String prompt) {
         ChatClient client = chatClient.getIfAvailable();
         if (client == null) {

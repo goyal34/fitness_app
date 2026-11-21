@@ -19,20 +19,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.springframework.data.mongodb.core.query.Criteria.where;
 
-/**
- * Sends pending outbox events to RabbitMQ.
- *
- * - Each event is claimed atomically (findAndModify pushes its nextAttemptAt
- *   forward as a lease), so several instances of this service never send the
- *   same event at the same time.
- * - An event is marked PUBLISHED only after RabbitMQ confirms it (publisher
- *   confirms) and did not return it as unroutable.
- * - Failures are retried with exponential backoff, then marked FAILED.
- *
- * Delivery is at-least-once: if the service stops between the confirm and
- * the PUBLISHED update, the event is sent again. The AI Service ignores
- * activities it has already reported on.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -83,7 +69,6 @@ public class OutboxPublisher {
 
             CorrelationData.Confirm confirm = correlation.getFuture()
                     .get(CONFIRM_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            // The returned message (if any) is always set before the confirm arrives.
             if (correlation.getReturned() != null) {
                 throw new IllegalStateException("Message was unroutable: " + correlation.getReturned().getReplyText());
             }

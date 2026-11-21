@@ -42,14 +42,10 @@ public class ActivityService {
                 .type(request.getType())
                 .duration(request.getDuration())
                 .caloriesBurned(request.getCaloriesBurned())
-                // Analytics group workouts by this date; default to "now" when not given.
                 .startTime(request.getStartTime() != null ? request.getStartTime() : LocalDateTime.now())
                 .additionalMetrics(request.getAdditionalMetrics())
                 .build();
 
-        // Transactional Outbox: the activity and the "activity created" event are
-        // saved in one MongoDB transaction, so there is never an activity without
-        // its event (or the reverse). OutboxPublisher sends the event to RabbitMQ.
         Activity savedActivity = transactionTemplate.execute(status -> {
             Activity saved = activityRepository.save(activity);
             outboxEventRepository.save(OutboxEvent.activityCreated(toEvent(saved)));
@@ -59,7 +55,6 @@ public class ActivityService {
         return mapToResponse(savedActivity);
     }
 
-    /** The outbox stores the shared wire contract, not the MongoDB document. */
     private static ActivityEvent toEvent(Activity activity) {
         return ActivityEvent.builder()
                 .id(activity.getId())
@@ -84,7 +79,6 @@ public class ActivityService {
         if (request.getCaloriesBurned() == null || request.getCaloriesBurned() < 0 || request.getCaloriesBurned() > 20000) {
             throw badRequest("caloriesBurned must be between 0 and 20000");
         }
-        // A few minutes of slack for clock differences between browser and server.
         if (request.getStartTime() != null && request.getStartTime().isAfter(LocalDateTime.now().plusMinutes(5))) {
             throw badRequest("startTime cannot be in the future");
         }
@@ -123,10 +117,6 @@ public class ActivityService {
         activityRepository.delete(findOwnedActivity(activityId, userId));
     }
 
-    /**
-     * Loads an activity only if it belongs to the given user. "Not found" and
-     * "not yours" give the same 404, so other users' ids can't be probed.
-     */
     private Activity findOwnedActivity(String activityId, String userId) {
         return activityRepository.findById(activityId)
                 .filter(activity -> activity.getUserId() != null && activity.getUserId().equals(userId))

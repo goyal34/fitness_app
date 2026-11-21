@@ -12,18 +12,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
-/**
- * The resource-server security policy shared by the User, Activity and AI
- * services.
- *
- * Every request must carry a valid Keycloak token, even when it comes from the
- * gateway. The caller is identified by the token's "sub" claim, never by a
- * header the caller could set themselves.
- *
- * This is registered as an auto-configuration (see META-INF/spring), so the
- * services pick it up just by depending on fitness-common. A service that needs
- * a different policy can declare its own {@link SecurityFilterChain} bean.
- */
 @AutoConfiguration(before = SecurityAutoConfiguration.class)
 @ConditionalOnClass({SecurityFilterChain.class, HttpSecurity.class})
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)

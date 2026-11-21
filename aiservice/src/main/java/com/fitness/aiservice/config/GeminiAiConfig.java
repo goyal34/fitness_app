@@ -10,14 +10,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Wires Spring AI's Google GenAI {@link ChatClient} only when a Gemini API key
- * is present, so the service can still start without one (recommendations then
- * fail with a clear FAILED report).
- *
- * Spring AI auto-config is disabled via {@code spring.ai.model.chat=none}
- * because it refuses to start with an empty key.
- */
 @Configuration
 public class GeminiAiConfig {
 

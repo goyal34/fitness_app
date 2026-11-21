@@ -10,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class StreakCalculatorTest {
 
-    // A Wednesday, so "this week" started on Monday 2026-11-09.
     private static final LocalDate TODAY = LocalDate.of(2026, 11, 11);
 
     private static StreakCalculator.Result compute(LocalDate... days) {
@@ -33,7 +32,6 @@ class StreakCalculatorTest {
 
     @Test
     void streakStaysAliveUntilTheEndOfToday() {
-        // Worked out yesterday and the day before, not yet today.
         StreakCalculator.Result r = compute(TODAY.minusDays(1), TODAY.minusDays(2));
         assertThat(r.current()).isEqualTo(2);
     }
@@ -67,7 +65,6 @@ class StreakCalculatorTest {
 
     @Test
     void weeklyStreakCountsConsecutiveWeeks() {
-        // This week (Mon 11-09), last week, and the week before; then a gap.
         StreakCalculator.Result r = compute(TODAY, LocalDate.of(2026, 11, 3), LocalDate.of(2026, 10, 26),
                 LocalDate.of(2026, 10, 5));
         assertThat(r.currentWeekly()).isEqualTo(3);

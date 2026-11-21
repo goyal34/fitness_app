@@ -3,7 +3,6 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Each service checks the token itself, so calls that skip the gateway are rejected.
           jwk-set-uri: http://localhost:8181/realms/fitness-oauth2/protocol/openid-connect/certs
   application:
     name: activity-service
@@ -16,8 +15,6 @@ spring:
     port: 5672
     username: guest
     password: guest
-    # The outbox publisher waits for RabbitMQ to confirm each message, and
-    # treats a message that reaches no queue (returned) as a failure.
     publisher-confirm-type: correlated
     publisher-returns: true
     template:

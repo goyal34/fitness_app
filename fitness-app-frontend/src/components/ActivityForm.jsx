@@ -6,8 +6,6 @@ import React, { useState } from 'react'
 import { useAddActivityMutation } from '../services/fitnessApi'
 import { ACTIVITY_STYLES } from '../theme'
 
-// Local wall-clock time as "YYYY-MM-DDTHH:mm" (what <input type="datetime-local"> uses).
-// toISOString() would be UTC and put workouts on the wrong day in analytics.
 const localNow = () => {
     const d = new Date();
     d.setSeconds(0, 0);
@@ -19,7 +17,6 @@ const empty = () => ({ type: 'RUNNING', duration: '', caloriesBurned: '', startT
 const ActivityForm = ({ onActivityAdded, onError }) => {
     const [activity, setActivity] = useState(empty);
     const [errors, setErrors] = useState({});
-    // The mutation tracks the in-flight state; no separate submitting flag.
     const [addActivity, { isLoading: submitting }] = useAddActivityMutation();
 
     const validate = () => {

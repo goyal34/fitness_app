@@ -28,7 +28,6 @@ const tipBoxSx = {
     whiteSpace: 'nowrap',
 };
 
-/** Floating tooltip, positioned in the chart's own box (used by non-Recharts widgets). */
 export const Tip = ({ x, y, children, width }) => {
     if (x == null) return null;
     const left = Math.max(4, Math.min(x, (width ?? 9999) - 4));
@@ -72,10 +71,6 @@ const ChartTooltip = ({ active, payload, valueLabel, unit, color, emptyLabel }) 
     );
 };
 
-/**
- * Vertical bar chart, one series.
- * data: [{ key, label, tooltipTitle, value }]
- */
 export const ColumnChart = ({ data, color = VIZ.blue, height = 220, unit = '', valueLabel = 'Value', integer = false }) => (
     <Box sx={{ width: '100%', height }} role="img" aria-label={`${valueLabel} bar chart with ${data.length} bars`}>
         <ResponsiveContainer width="100%" height="100%">
@@ -107,10 +102,6 @@ export const ColumnChart = ({ data, color = VIZ.blue, height = 220, unit = '', v
     </Box>
 );
 
-/**
- * Line chart with markers; null values leave a gap.
- * data: [{ key, label, tooltipTitle, value|null }], bands: [{ value, label }] reference lines
- */
 export const LineChart = ({ data, color = VIZ.blue, height = 220, unit = '', valueLabel = 'Value', bands = [] }) => (
     <Box sx={{ width: '100%', height }} role="img" aria-label={`${valueLabel} line chart`}>
         <ResponsiveContainer width="100%" height="100%">
@@ -152,10 +143,6 @@ export const LineChart = ({ data, color = VIZ.blue, height = 220, unit = '', val
     </Box>
 );
 
-/**
- * Horizontal bars, sorted by the caller. Labels on the left, value at the bar end.
- * data: [{ key, label, value, valueText, extra }]
- */
 export const BarList = ({ data, color = VIZ.blue, valueLabel = 'Value' }) => {
     const [hover, setHover] = useState(null);
     const max = Math.max(...data.map((d) => d.value), 1);
@@ -188,10 +175,6 @@ export const BarList = ({ data, color = VIZ.blue, valueLabel = 'Value' }) => {
     );
 };
 
-/**
- * One whole split into ordered parts (e.g. workouts by intensity level).
- * parts: [{ key, label, value, color, textColor }]
- */
 export const SegmentedBar = ({ parts, unit = 'workouts' }) => {
     const [hover, setHover] = useState(null);
     const total = parts.reduce((s, p) => s + p.value, 0);
@@ -234,12 +217,10 @@ export const SegmentedBar = ({ parts, unit = 'workouts' }) => {
     );
 };
 
-/** Activity calendar: weeks as columns, Mon..Sun as rows. days: [{ date, workouts, minutes }] oldest first. */
 export const ActivityHeatmap = ({ days }) => {
     const [hover, setHover] = useState(null);
     const scrollRef = useRef(null);
     useEffect(() => {
-        // On narrow screens start scrolled to the most recent weeks.
         if (scrollRef.current) scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
     }, [days]);
 

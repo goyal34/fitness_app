@@ -2,13 +2,6 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 const API_URL = 'http://localhost:8080/api';
 
-/**
- * The single HTTP client for the app. The gateway works out who the user is
- * from the token itself, so every request carries the saved bearer token.
- *
- * Mutations invalidate the tags they affect, which refetches the cached list
- * and the analytics dashboard automatically.
- */
 export const fitnessApi = createApi({
     reducerPath: 'fitnessApi',
     baseQuery: fetchBaseQuery({
@@ -60,7 +53,6 @@ export const fitnessApi = createApi({
                 { type: 'Recommendation', id },
                 'Analytics',
             ],
-            // Remove the card straight away; put it back if the request fails.
             async onQueryStarted(id, { dispatch, queryFulfilled }) {
                 const patchResult = dispatch(
                     fitnessApi.util.updateQueryData('getActivities', undefined, (draft) => {
@@ -76,8 +68,6 @@ export const fitnessApi = createApi({
             },
         }),
 
-        // The AI report is generated asynchronously via RabbitMQ, so this query
-        // is polled by ActivityDetail until it exists.
         getActivityRecommendation: builder.query({
             query: (id) => `/recommendations/activity/${id}`,
             providesTags: (result, error, id) => [{ type: 'Recommendation', id }],

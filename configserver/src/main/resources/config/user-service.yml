@@ -6,7 +6,6 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Each service checks the token itself, so calls that skip the gateway are rejected.
           jwk-set-uri: http://localhost:8181/realms/fitness-oauth2/protocol/openid-connect/certs
   datasource:
     url: jdbc:postgresql://localhost:5432/fitness_user_db

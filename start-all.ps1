@@ -1,32 +1,4 @@
 #Requires -Version 5.1
-<#
-.SYNOPSIS
-    Starts the complete fitness application with one command.
-
-.DESCRIPTION
-    Starts PostgreSQL, MongoDB, RabbitMQ and Keycloak (Docker), then starts
-    every Spring Boot service in the correct order, bootstraps the Keycloak
-    realm/demo user, and finally starts the React frontend.
-
-    Run this from the repository root:
-        .\start-all.ps1
-    or double-click start-all.cmd.
-
-    Logs are written to .logs\. Stop everything with .\stop-all.ps1.
-
-.PARAMETER SkipInfra
-    Do not start Docker containers. Use this when PostgreSQL, MongoDB,
-    RabbitMQ and Keycloak are already running elsewhere.
-
-.PARAMETER SkipFrontend
-    Start only the backend services and infrastructure.
-
-.PARAMETER NoBrowser
-    Do not open the frontend in the default browser when startup finishes.
-
-.PARAMETER StartupTimeoutSeconds
-    How long to wait for each service to become ready. Default: 300.
-#>
 [CmdletBinding()]
 param(
     [switch]$SkipInfra,
@@ -73,10 +45,6 @@ function Write-Err {
     Write-Host "[error] $Message" -ForegroundColor Red
 }
 
-# ---------------------------------------------------------------------------
-# Environment
-# ---------------------------------------------------------------------------
-
 function Import-DotEnv {
     param([string]$Path)
 
@@ -95,7 +63,6 @@ function Import-DotEnv {
                 $value = $value.Substring(1, $value.Length - 2)
             }
 
-            # Values already exported in the shell take precedence.
             if ([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($name, 'Process'))) {
                 [Environment]::SetEnvironmentVariable($name, $value, [EnvironmentVariableTarget]::Process)
             }
@@ -113,10 +80,6 @@ if (-not $env:POSTGRES_PASSWORD) {
 if (-not $env:KEYCLOAK_ADMIN) { $env:KEYCLOAK_ADMIN = 'admin' }
 if (-not $env:KEYCLOAK_ADMIN_PASSWORD) { $env:KEYCLOAK_ADMIN_PASSWORD = 'admin' }
 if (-not $env:APP_TIMEZONE) { $env:APP_TIMEZONE = 'Asia/Kolkata' }
-
-# ---------------------------------------------------------------------------
-# General helpers
-# ---------------------------------------------------------------------------
 
 function Test-TcpHost {
     param(
@@ -184,7 +147,6 @@ function Show-ContainerLogs {
         }
     }
     catch {
-        # Docker may not be available when -SkipInfra is used.
     }
 }
 
@@ -217,7 +179,6 @@ function Wait-ForEndpoint {
                 }
             }
             catch {
-                # A 401/404 still proves that the HTTP server is listening.
                 if ($_.Exception.Response) {
                     Write-Ok "$Name is ready (port $Port)."
                     return
@@ -244,10 +205,6 @@ function Wait-ForEndpoint {
     if ($Name -eq 'Keycloak') { Show-ContainerLogs -Service 'keycloak' }
     throw "$Name did not become ready within $TimeoutSeconds seconds."
 }
-
-# ---------------------------------------------------------------------------
-# State (so stop-all.ps1 can stop only the processes this script started)
-# ---------------------------------------------------------------------------
 
 function Read-State {
     if (-not (Test-Path -LiteralPath $StateFile)) { return }
@@ -301,10 +258,6 @@ function Save-State {
 
 Read-State
 
-# ---------------------------------------------------------------------------
-# Infrastructure
-# ---------------------------------------------------------------------------
-
 function Start-Infrastructure {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw "Docker was not found. Install Docker Desktop, or start the databases yourself and run .\start-all.ps1 -SkipInfra."
@@ -346,13 +299,7 @@ function Wait-ForInfrastructure {
     Wait-ForEndpoint -Name 'Keycloak'   -Port 8181  -Url 'http://localhost:8181/realms/master' -TimeoutSeconds 600
 }
 
-# The Activity Service saves a workout and its outbox event in one MongoDB
-# transaction, which needs a replica set. Makes sure the compose MongoDB runs
-# as one ("rs0") and has a writable primary before the services start.
 function Initialize-MongoReplicaSet {
-    # docker compose writes normal progress ("Container ... Running") to stderr.
-    # With 'Stop', Windows PowerShell turns redirected stderr into a fatal error,
-    # so this function checks exit codes instead.
     $ErrorActionPreference = 'Continue'
 
     $containerId = & docker compose ps -q mongodb 2>$null
@@ -362,7 +309,6 @@ function Initialize-MongoReplicaSet {
     }
 
     Write-Step "Preparing MongoDB replica set"
-    # Recreates the container if it was started before --replSet was added.
     & docker compose up -d mongodb *> $null
     if ($LASTEXITCODE -ne 0) {
         throw "Could not start MongoDB with docker compose."
@@ -384,10 +330,6 @@ function Initialize-MongoReplicaSet {
     Show-ContainerLogs -Service 'mongodb'
     throw "MongoDB did not become a writable replica set primary. Last output: $out"
 }
-
-# ---------------------------------------------------------------------------
-# Keycloak bootstrap
-# ---------------------------------------------------------------------------
 
 function Initialize-Keycloak {
     $base = 'http://localhost:8181'
@@ -422,7 +364,6 @@ function Initialize-Keycloak {
 
     $headers = @{ Authorization = "Bearer $token" }
 
-    # Realm
     $realmExists = $false
     try {
         Invoke-RestMethod -Method Get -Uri "$base/admin/realms/fitness-oauth2" -Headers $headers -TimeoutSec 15 | Out-Null
@@ -441,9 +382,6 @@ function Initialize-Keycloak {
         Write-Ok "created realm 'fitness-oauth2'."
     }
 
-    # Realm settings, applied on every start so older realms get them too.
-    # Self sign-up is on. Email verification and "forgot password" stay off
-    # because they need an SMTP server (configure one under Realm settings > Email).
     $realmSettings = @{
         registrationAllowed         = $true
         registrationEmailAsUsername = $false
@@ -459,7 +397,6 @@ function Initialize-Keycloak {
         -ContentType 'application/json' -Body $realmSettings -TimeoutSec 30 | Out-Null
     Write-Ok "self sign-up enabled (minimum password length 8)."
 
-    # PKCE client
     $clients = Invoke-RestMethod -Method Get `
         -Uri "$base/admin/realms/fitness-oauth2/clients?clientId=oauth2-pkce-client" `
         -Headers $headers -TimeoutSec 15
@@ -485,15 +422,12 @@ function Initialize-Keycloak {
             -Headers $headers -TimeoutSec 15)
     }
 
-    # Allow Keycloak to send people back to the app after logout ("+" = same as
-    # the redirect URIs). Applied every start so older clients get it too.
     $logoutBody = @{
         attributes = @{ 'post.logout.redirect.uris' = '+' }
     } | ConvertTo-Json -Depth 4
     Invoke-RestMethod -Method Put -Uri "$base/admin/realms/fitness-oauth2/clients/$($clients[0].id)" `
         -Headers $headers -ContentType 'application/json' -Body $logoutBody -TimeoutSec 30 | Out-Null
 
-    # Demo user
     $users = Invoke-RestMethod -Method Get `
         -Uri "$base/admin/realms/fitness-oauth2/users?username=testuser&exact=true" `
         -Headers $headers -TimeoutSec 15
@@ -507,11 +441,9 @@ function Initialize-Keycloak {
             firstName     = 'Test'
             lastName      = 'User'
             enabled       = $true
-            # Must satisfy the realm's password policy above (8+ characters).
             credentials   = @(@{ type = 'password'; value = 'test1234'; temporary = $false })
         } | ConvertTo-Json -Depth 6
 
-        # The demo account is a convenience; don't stop the whole startup if it fails.
         try {
             Invoke-RestMethod -Method Post -Uri "$base/admin/realms/fitness-oauth2/users" `
                 -Headers $headers -ContentType 'application/json' -Body $userBody -TimeoutSec 30 | Out-Null
@@ -524,10 +456,6 @@ function Initialize-Keycloak {
 
     Write-Ok "Keycloak is ready."
 }
-
-# ---------------------------------------------------------------------------
-# Spring Boot services
-# ---------------------------------------------------------------------------
 
 function Start-BackendService {
     param(
@@ -579,10 +507,6 @@ function Start-BackendService {
         -ProcessId $process.Id `
         -LogOut $outLog -LogErr $errLog
 }
-
-# ---------------------------------------------------------------------------
-# Frontend
-# ---------------------------------------------------------------------------
 
 function Start-Frontend {
     $port = 5173
@@ -640,10 +564,6 @@ function Start-Frontend {
         -LogOut $outLog -LogErr $errLog
 }
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 try {
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host " Fitness App - single command startup" -ForegroundColor Cyan
@@ -653,8 +573,6 @@ try {
         throw "Maven (mvn) was not found. Install Maven 3.9+ or add it to PATH."
     }
 
-    # The services depend on fitness-common from the local repository, so it
-    # must be installed before Maven starts them.
     Write-Step "Building the shared module (fitness-common)"
     & mvn -q -f (Join-Path $Root 'fitness-common\pom.xml') install -DskipTests
     if ($LASTEXITCODE -ne 0) {

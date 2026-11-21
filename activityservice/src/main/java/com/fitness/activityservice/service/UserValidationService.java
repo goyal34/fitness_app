@@ -17,10 +17,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class UserValidationService {
     private final WebClient userServiceWebClient;
 
-    /**
-     * Checks that the caller has a profile in the User Service. The caller's own
-     * token is passed along, because the User Service checks it on every request.
-     */
     public boolean validateUser(String userId) {
         log.info("Calling User Validation API for userId: {}", userId);
         try {

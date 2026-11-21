@@ -13,13 +13,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-/**
- * Runs on every routed request, after Spring Security has verified the JWT.
- *
- * On a user's first request their Keycloak account is copied into the User
- * Service. The services behind the gateway identify the caller from the token
- * itself, so any X-User-ID header the client sends is simply dropped.
- */
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -58,7 +51,6 @@ public class KeycloakUserSyncFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        // Before the routing filters, so the cleaned request is what gets forwarded.
         return Ordered.HIGHEST_PRECEDENCE;
     }
 }

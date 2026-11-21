@@ -15,11 +15,6 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 
-/**
- * Workout analytics for the logged-in user (the "sub" of their token).
- * /dashboard returns everything the dashboard needs in one request; the
- * other endpoints return one section each, with adjustable ranges.
- */
 @RestController
 @RequestMapping("/api/activities/analytics")
 @RequiredArgsConstructor
@@ -66,7 +61,6 @@ public class AnalyticsController {
         return analytics.streaks(jwt.getSubject());
     }
 
-    /** Compares a month (YYYY-MM, default: this month) with the month before it. */
     @GetMapping("/month-comparison")
     public MonthComparison monthComparison(@AuthenticationPrincipal Jwt jwt,
                                            @RequestParam(required = false) String month) {

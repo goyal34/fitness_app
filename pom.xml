@@ -9,16 +9,6 @@
 	<name>fitness-app-microservices</name>
 	<description>Aggregator for the fitness microservices and the shared module</description>
 
-	<!--
-		Each service keeps spring-boot-starter-parent as its own parent so it can
-		still be built and run on its own. This aggregator only makes it possible
-		to build everything, including fitness-common, with one Maven command:
-
-			mvn install
-
-		Run it once before starting the services (start-all.ps1 does this for you),
-		because the services resolve fitness-common from the local repository.
-	-->
 	<modules>
 		<module>fitness-common</module>
 		<module>configserver</module>

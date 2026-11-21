@@ -17,14 +17,6 @@ public class UserService {
 
     private final UserRepository repository;
 
-    /**
-     * Creates the local profile for a Keycloak user, or updates it if it exists.
-     *
-     * If a profile with the same email exists but is linked to a different
-     * Keycloak account (for example the Keycloak user was deleted and recreated),
-     * it is re-linked only when Keycloak says the email is verified. Otherwise
-     * anyone could claim another person's profile by signing up with their email.
-     */
     public UserResponse register(Jwt token) {
         String keycloakId = token.getSubject();
         String email = token.getClaimAsString("email");
@@ -62,16 +54,9 @@ public class UserService {
         return mapToResponse(repository.save(user));
     }
 
-    /**
-     * Returns a profile, but only to its owner.
-     *
-     * @param userId     the profile's database id
-     * @param callerId   the caller's Keycloak id (the "sub" of their verified token)
-     */
     public UserResponse getUserProfile(String userId, String callerId) {
         User user = repository.findById(userId)
                 .filter(u -> u.getKeycloakId() != null && u.getKeycloakId().equals(callerId))
-                // Same answer for "missing" and "not yours", so ids can't be probed.
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         return mapToResponse(user);
     }
